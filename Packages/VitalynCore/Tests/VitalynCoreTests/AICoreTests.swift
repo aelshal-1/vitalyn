@@ -25,12 +25,12 @@ import Testing
     @Test(arguments: Array(AITasks.allSchemas.keys).sorted())
     func schemaIsValidForStructuredOutputs(name: String) throws {
         let schema = try #require(AITasks.allSchemas[name])
-        #expect(Schema.problems(in: schema).isEmpty, "\(name): \(Schema.problems(in: schema))")
+        #expect(JSONSchema.problems(in: schema).isEmpty, "\(name): \(JSONSchema.problems(in: schema))")
     }
 
     @Test func problemsAreDetected() {
         let bad: JSONValue = ["type": "object", "properties": ["a": ["type": "number", "minimum": 0]], "required": []]
-        let issues = Schema.problems(in: bad)
+        let issues = JSONSchema.problems(in: bad)
         #expect(issues.contains { $0.contains("additionalProperties") })
         #expect(issues.contains { $0.contains("not required") })
         #expect(issues.contains { $0.contains("minimum") })

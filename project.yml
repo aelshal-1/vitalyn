@@ -12,7 +12,8 @@ options:
 
 settings:
   base:
-    SWIFT_VERSION: "6.0"
+    # App targets use the Swift 5 language mode (Swift 6 compiler); VitalynCore uses Swift 6 strict concurrency.
+    SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic

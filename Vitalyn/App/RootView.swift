@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today, food, coach, progress, me
@@ -36,13 +37,16 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// iPhone gets the bilingual bottom bar; iPad gets a sidebar.
+/// iPhone gets the bilingual bottom bar; iPad gets a sidebar. First launch shows onboarding.
 struct RootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Query private var profiles: [UserProfile]
     @State private var tab: AppTab = .today
 
     var body: some View {
-        if sizeClass == .regular {
+        if profiles.isEmpty {
+            OnboardingView { tab = .today }
+        } else if sizeClass == .regular {
             NavigationSplitView {
                 List(AppTab.allCases) { item in
                     Button {
@@ -73,15 +77,18 @@ struct RootView: View {
     private func screen(for tab: AppTab) -> some View {
         switch tab {
         case .today:
-            TodayView()
+            NavigationStack {
+                TodayView(openProfile: { self.tab = .me })
+                    .toolbar(.hidden, for: .navigationBar)
+            }
         case .food:
-            PlaceholderView(ar: "الأكل", en: "Food", phaseAr: "تصوير الوجبات والمنتجات — المرحلة 2", phaseEn: "Meal photos & products — phase 2", symbol: "camera")
+            FoodView()
         case .coach:
-            PlaceholderView(ar: "المدرب", en: "Coach", phaseAr: "الشات والصوت مع Claude — المرحلة 3", phaseEn: "Chat & voice with Claude — phase 3", symbol: "sparkles")
+            CoachView()
         case .progress:
-            PlaceholderView(ar: "التقدم", en: "Progress", phaseAr: "InBody والأفاتار 3D — المراحل 1 و 5", phaseEn: "InBody & 3D avatar — phases 1 and 5", symbol: "figure.stand")
+            ProgressHubView()
         case .me:
-            PlaceholderView(ar: "ملفي الصحي", en: "Health profile", phaseAr: "الملف الصحي و Apple Health — المرحلة 1", phaseEn: "Profile & Apple Health — phase 1", symbol: "heart.text.square")
+            ProfileView()
         }
     }
 }
@@ -119,28 +126,5 @@ struct BilingualTabBar: View {
                 .overlay(alignment: .top) { Rectangle().fill(VColor.line).frame(height: 1) }
                 .ignoresSafeArea(edges: .bottom)
         }
-    }
-}
-
-struct PlaceholderView: View {
-    let ar: String
-    let en: String
-    let phaseAr: String
-    let phaseEn: String
-    let symbol: String
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: symbol)
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(VColor.primary)
-                .frame(width: 88, height: 88)
-                .background(VColor.primarySoft, in: Circle())
-            BiText(ar: ar, en: en, size: 24, alignment: .center)
-            BiText(ar: phaseAr, en: phaseEn, size: 14, weight: 400, color: VColor.inkSecondary, alignment: .center)
-                .padding(.horizontal, 32)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(VColor.ground)
     }
 }

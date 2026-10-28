@@ -3,7 +3,7 @@ import Foundation
 /// Builders for structured-output JSON schemas.
 /// Every object lists all its properties as required and sets `additionalProperties: false`,
 /// as structured outputs require. Optional values are expressed with `nullable`.
-public enum Schema {
+public enum JSONSchema {
     public static func object(_ properties: [(String, JSONValue)], description: String? = nil) -> JSONValue {
         var pairs: [(String, JSONValue)] = [("type", "object")]
         if let description { pairs.append(("description", .string(description))) }

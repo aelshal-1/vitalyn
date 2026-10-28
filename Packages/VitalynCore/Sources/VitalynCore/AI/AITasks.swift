@@ -85,29 +85,29 @@ public enum AITasks {
 
     // MARK: InBody
 
-    public static let inBodySchema = Schema.object([
-        ("scanDate", Schema.nullable(Schema.string("Scan date as YYYY-MM-DD if printed"))),
-        ("weightKg", Schema.number("Body weight in kg")),
-        ("skeletalMuscleKg", Schema.nullable(Schema.number("Skeletal Muscle Mass (SMM) in kg"))),
-        ("bodyFatKg", Schema.nullable(Schema.number("Body Fat Mass in kg"))),
-        ("bodyFatPercent", Schema.nullable(Schema.number("Percent Body Fat (PBF)"))),
-        ("leanMassKg", Schema.nullable(Schema.number("Fat Free Mass / lean body mass in kg"))),
-        ("visceralFatLevel", Schema.nullable(Schema.number("Visceral Fat Level"))),
-        ("bmrKcal", Schema.nullable(Schema.number("Basal Metabolic Rate in kcal"))),
-        ("totalBodyWaterL", Schema.nullable(Schema.number("Total Body Water in L"))),
-        ("inbodyScore", Schema.nullable(Schema.number("InBody Score out of 100"))),
-        ("heightCm", Schema.nullable(Schema.number("Height in cm if printed"))),
-        ("ageYears", Schema.nullable(Schema.integer("Age if printed"))),
-        ("segmentalLean", Schema.object([
-            ("rightArmKg", Schema.nullable(Schema.number())),
-            ("leftArmKg", Schema.nullable(Schema.number())),
-            ("trunkKg", Schema.nullable(Schema.number())),
-            ("rightLegKg", Schema.nullable(Schema.number())),
-            ("leftLegKg", Schema.nullable(Schema.number()))
+    public static let inBodySchema = JSONSchema.object([
+        ("scanDate", JSONSchema.nullable(JSONSchema.string("Scan date as YYYY-MM-DD if printed"))),
+        ("weightKg", JSONSchema.number("Body weight in kg")),
+        ("skeletalMuscleKg", JSONSchema.nullable(JSONSchema.number("Skeletal Muscle Mass (SMM) in kg"))),
+        ("bodyFatKg", JSONSchema.nullable(JSONSchema.number("Body Fat Mass in kg"))),
+        ("bodyFatPercent", JSONSchema.nullable(JSONSchema.number("Percent Body Fat (PBF)"))),
+        ("leanMassKg", JSONSchema.nullable(JSONSchema.number("Fat Free Mass / lean body mass in kg"))),
+        ("visceralFatLevel", JSONSchema.nullable(JSONSchema.number("Visceral Fat Level"))),
+        ("bmrKcal", JSONSchema.nullable(JSONSchema.number("Basal Metabolic Rate in kcal"))),
+        ("totalBodyWaterL", JSONSchema.nullable(JSONSchema.number("Total Body Water in L"))),
+        ("inbodyScore", JSONSchema.nullable(JSONSchema.number("InBody Score out of 100"))),
+        ("heightCm", JSONSchema.nullable(JSONSchema.number("Height in cm if printed"))),
+        ("ageYears", JSONSchema.nullable(JSONSchema.integer("Age if printed"))),
+        ("segmentalLean", JSONSchema.object([
+            ("rightArmKg", JSONSchema.nullable(JSONSchema.number())),
+            ("leftArmKg", JSONSchema.nullable(JSONSchema.number())),
+            ("trunkKg", JSONSchema.nullable(JSONSchema.number())),
+            ("rightLegKg", JSONSchema.nullable(JSONSchema.number())),
+            ("leftLegKg", JSONSchema.nullable(JSONSchema.number()))
         ], description: "Segmental lean analysis in kg")),
-        ("lowConfidenceFields", Schema.array(Schema.string(), description: "Names of fields above that were hard to read")),
-        ("summaryAr", Schema.string("2–3 sentence summary of what the numbers mean for the user's goal, Egyptian Arabic")),
-        ("summaryEn", Schema.string("Same summary in English"))
+        ("lowConfidenceFields", JSONSchema.array(JSONSchema.string(), description: "Names of fields above that were hard to read")),
+        ("summaryAr", JSONSchema.string("2–3 sentence summary of what the numbers mean for the user's goal, Egyptian Arabic")),
+        ("summaryEn", JSONSchema.string("Same summary in English"))
     ])
 
     public static func inBody(file: ClaudeContent, context: UserContext?) -> AIRequest {
@@ -123,35 +123,35 @@ public enum AITasks {
 
     // MARK: Meals
 
-    static let foodSchema = Schema.object([
-        ("nameAr", Schema.string()),
-        ("nameEn", Schema.string()),
-        ("grams", Schema.number("Estimated eaten weight in grams")),
-        ("kcal", Schema.number()),
-        ("proteinG", Schema.number()),
-        ("carbsG", Schema.number()),
-        ("fatG", Schema.number()),
-        ("confidence", Schema.enumeration(["high", "medium", "low"])),
-        ("libraryProductId", Schema.nullable(Schema.string("id of the matching saved product, if any")))
+    static let foodSchema = JSONSchema.object([
+        ("nameAr", JSONSchema.string()),
+        ("nameEn", JSONSchema.string()),
+        ("grams", JSONSchema.number("Estimated eaten weight in grams")),
+        ("kcal", JSONSchema.number()),
+        ("proteinG", JSONSchema.number()),
+        ("carbsG", JSONSchema.number()),
+        ("fatG", JSONSchema.number()),
+        ("confidence", JSONSchema.enumeration(["high", "medium", "low"])),
+        ("libraryProductId", JSONSchema.nullable(JSONSchema.string("id of the matching saved product, if any")))
     ])
 
-    public static let mealSchema = Schema.object([
-        ("titleAr", Schema.string("Short meal title, Egyptian Arabic")),
-        ("titleEn", Schema.string("Short meal title, English")),
-        ("items", Schema.array(foodSchema)),
-        ("questions", Schema.array(Schema.object([
-            ("questionAr", Schema.string()),
-            ("questionEn", Schema.string()),
-            ("itemIndex", Schema.nullable(Schema.integer("Index in items this question is about"))),
-            ("options", Schema.array(Schema.object([
-                ("labelAr", Schema.string()),
-                ("labelEn", Schema.string()),
-                ("libraryProductId", Schema.nullable(Schema.string("Choosing this option sets the item to this saved product"))),
-                ("grams", Schema.nullable(Schema.number("Choosing this option sets the item weight to this many grams")))
+    public static let mealSchema = JSONSchema.object([
+        ("titleAr", JSONSchema.string("Short meal title, Egyptian Arabic")),
+        ("titleEn", JSONSchema.string("Short meal title, English")),
+        ("items", JSONSchema.array(foodSchema)),
+        ("questions", JSONSchema.array(JSONSchema.object([
+            ("questionAr", JSONSchema.string()),
+            ("questionEn", JSONSchema.string()),
+            ("itemIndex", JSONSchema.nullable(JSONSchema.integer("Index in items this question is about"))),
+            ("options", JSONSchema.array(JSONSchema.object([
+                ("labelAr", JSONSchema.string()),
+                ("labelEn", JSONSchema.string()),
+                ("libraryProductId", JSONSchema.nullable(JSONSchema.string("Choosing this option sets the item to this saved product"))),
+                ("grams", JSONSchema.nullable(JSONSchema.number("Choosing this option sets the item weight to this many grams")))
             ])))
         ]), description: "At most 3 short questions, only when an answer would change the numbers meaningfully")),
-        ("notesAr", Schema.string("One short note on the meal vs today's targets, Egyptian Arabic")),
-        ("notesEn", Schema.string("Same note in English"))
+        ("notesAr", JSONSchema.string("One short note on the meal vs today's targets, Egyptian Arabic")),
+        ("notesEn", JSONSchema.string("Same note in English"))
     ])
 
     static func libraryText(_ library: [LibraryProduct]) -> String {
@@ -186,22 +186,22 @@ public enum AITasks {
 
     // MARK: Products
 
-    public static let productSchema = Schema.object([
-        ("nameAr", Schema.string("Product name in Arabic (translate if only English is printed)")),
-        ("nameEn", Schema.string("Product name in English (translate if only Arabic is printed)")),
-        ("brand", Schema.nullable(Schema.string())),
-        ("barcode", Schema.nullable(Schema.string("Digits of the barcode if visible"))),
-        ("servingSizeG", Schema.nullable(Schema.number("Serving or package size in grams (or ml)"))),
-        ("servingDescAr", Schema.string("e.g. علبة 170 جم")),
-        ("servingDescEn", Schema.string("e.g. 170 g cup")),
-        ("per100g", Schema.object([
-            ("kcal", Schema.number()),
-            ("proteinG", Schema.number()),
-            ("carbsG", Schema.number()),
-            ("fatG", Schema.number()),
-            ("fiberG", Schema.nullable(Schema.number())),
-            ("sugarG", Schema.nullable(Schema.number())),
-            ("sodiumMg", Schema.nullable(Schema.number()))
+    public static let productSchema = JSONSchema.object([
+        ("nameAr", JSONSchema.string("Product name in Arabic (translate if only English is printed)")),
+        ("nameEn", JSONSchema.string("Product name in English (translate if only Arabic is printed)")),
+        ("brand", JSONSchema.nullable(JSONSchema.string())),
+        ("barcode", JSONSchema.nullable(JSONSchema.string("Digits of the barcode if visible"))),
+        ("servingSizeG", JSONSchema.nullable(JSONSchema.number("Serving or package size in grams (or ml)"))),
+        ("servingDescAr", JSONSchema.string("e.g. علبة 170 جم")),
+        ("servingDescEn", JSONSchema.string("e.g. 170 g cup")),
+        ("per100g", JSONSchema.object([
+            ("kcal", JSONSchema.number()),
+            ("proteinG", JSONSchema.number()),
+            ("carbsG", JSONSchema.number()),
+            ("fatG", JSONSchema.number()),
+            ("fiberG", JSONSchema.nullable(JSONSchema.number())),
+            ("sugarG", JSONSchema.nullable(JSONSchema.number())),
+            ("sodiumMg", JSONSchema.nullable(JSONSchema.number()))
         ], description: "Values per 100 g (or 100 ml); convert from per-serving values if that is all the label shows"))
     ])
 
@@ -214,28 +214,28 @@ public enum AITasks {
 
     // MARK: Coach
 
-    public static let coachSchema = Schema.object([
-        ("replyAr", Schema.string("The reply, Egyptian Arabic, conversational and concise")),
-        ("replyEn", Schema.string("The same reply in English")),
-        ("actions", Schema.array(Schema.object([
-            ("type", Schema.enumeration(CoachActionType.allValues)),
-            ("workout", Schema.nullable(Schema.object([
-                ("nameAr", Schema.string()),
-                ("nameEn", Schema.string()),
-                ("kind", Schema.enumeration(WorkoutKind.allCases.map(\.rawValue))),
-                ("minutes", Schema.number()),
-                ("kcal", Schema.number("Estimated active kcal for this user"))
+    public static let coachSchema = JSONSchema.object([
+        ("replyAr", JSONSchema.string("The reply, Egyptian Arabic, conversational and concise")),
+        ("replyEn", JSONSchema.string("The same reply in English")),
+        ("actions", JSONSchema.array(JSONSchema.object([
+            ("type", JSONSchema.enumeration(CoachActionType.allValues)),
+            ("workout", JSONSchema.nullable(JSONSchema.object([
+                ("nameAr", JSONSchema.string()),
+                ("nameEn", JSONSchema.string()),
+                ("kind", JSONSchema.enumeration(WorkoutKind.allCases.map(\.rawValue))),
+                ("minutes", JSONSchema.number()),
+                ("kcal", JSONSchema.number("Estimated active kcal for this user"))
             ]))),
-            ("waterGlasses", Schema.nullable(Schema.integer())),
-            ("meal", Schema.nullable(Schema.object([
-                ("titleAr", Schema.string()),
-                ("titleEn", Schema.string()),
-                ("items", Schema.array(foodSchema))
+            ("waterGlasses", JSONSchema.nullable(JSONSchema.integer())),
+            ("meal", JSONSchema.nullable(JSONSchema.object([
+                ("titleAr", JSONSchema.string()),
+                ("titleEn", JSONSchema.string()),
+                ("items", JSONSchema.array(foodSchema))
             ]))),
-            ("videos", Schema.array(Schema.object([
-                ("titleAr", Schema.string()),
-                ("titleEn", Schema.string()),
-                ("query", Schema.string("YouTube search query that finds a good matching workout video"))
+            ("videos", JSONSchema.array(JSONSchema.object([
+                ("titleAr", JSONSchema.string()),
+                ("titleEn", JSONSchema.string()),
+                ("query", JSONSchema.string("YouTube search query that finds a good matching workout video"))
             ])))
         ]), description: "Things the app should do. log_workout / log_water / log_meal only when the user says they did or ate something; suggest_videos when recommending workouts. Empty when nothing to do."))
     ])
@@ -253,9 +253,9 @@ public enum AITasks {
         return AIRequest(system: system, messages: messages, schema: coachSchema, effort: .low, maxTokens: 6000)
     }
 
-    public static let tipSchema = Schema.object([
-        ("tipAr", Schema.string("One practical suggestion for the rest of today, Egyptian Arabic, 1–2 sentences")),
-        ("tipEn", Schema.string("Same in English"))
+    public static let tipSchema = JSONSchema.object([
+        ("tipAr", JSONSchema.string("One practical suggestion for the rest of today, Egyptian Arabic, 1–2 sentences")),
+        ("tipEn", JSONSchema.string("Same in English"))
     ])
 
     public static func dailyTip(context: UserContext) -> AIRequest {
@@ -266,30 +266,30 @@ public enum AITasks {
 
     // MARK: Plans
 
-    static let plannedMealSchema = Schema.object([
-        ("slot", Schema.enumeration(MealSlot.allCases.map(\.rawValue))),
-        ("nameAr", Schema.string()),
-        ("nameEn", Schema.string()),
-        ("kcal", Schema.number()),
-        ("proteinG", Schema.number()),
-        ("carbsG", Schema.number()),
-        ("fatG", Schema.number()),
-        ("recipeAr", Schema.string("Ingredients with grams and a one-line method, Egyptian Arabic")),
-        ("recipeEn", Schema.string("Same in English"))
+    static let plannedMealSchema = JSONSchema.object([
+        ("slot", JSONSchema.enumeration(MealSlot.allCases.map(\.rawValue))),
+        ("nameAr", JSONSchema.string()),
+        ("nameEn", JSONSchema.string()),
+        ("kcal", JSONSchema.number()),
+        ("proteinG", JSONSchema.number()),
+        ("carbsG", JSONSchema.number()),
+        ("fatG", JSONSchema.number()),
+        ("recipeAr", JSONSchema.string("Ingredients with grams and a one-line method, Egyptian Arabic")),
+        ("recipeEn", JSONSchema.string("Same in English"))
     ])
 
-    public static let weekPlanSchema = Schema.object([
-        ("days", Schema.array(Schema.object([
-            ("dayIndex", Schema.integer("0 = first day of the plan … 6")),
-            ("meals", Schema.array(plannedMealSchema))
+    public static let weekPlanSchema = JSONSchema.object([
+        ("days", JSONSchema.array(JSONSchema.object([
+            ("dayIndex", JSONSchema.integer("0 = first day of the plan … 6")),
+            ("meals", JSONSchema.array(plannedMealSchema))
         ]), description: "Exactly 7 days")),
-        ("groceries", Schema.array(Schema.object([
-            ("nameAr", Schema.string()),
-            ("nameEn", Schema.string()),
-            ("quantity", Schema.string("Total for the week, e.g. 1.5 kg"))
+        ("groceries", JSONSchema.array(JSONSchema.object([
+            ("nameAr", JSONSchema.string()),
+            ("nameEn", JSONSchema.string()),
+            ("quantity", JSONSchema.string("Total for the week, e.g. 1.5 kg"))
         ]))),
-        ("notesAr", Schema.string("Short notes about the plan, Egyptian Arabic")),
-        ("notesEn", Schema.string("Same in English"))
+        ("notesAr", JSONSchema.string("Short notes about the plan, Egyptian Arabic")),
+        ("notesEn", JSONSchema.string("Same in English"))
     ])
 
     public static func weekPlan(context: UserContext, preset: PlanPreset, request: String) -> AIRequest {
@@ -311,15 +311,15 @@ public enum AITasks {
 
     // MARK: Workouts
 
-    public static let workoutsSchema = Schema.object([
-        ("items", Schema.array(Schema.object([
-            ("titleAr", Schema.string()),
-            ("titleEn", Schema.string()),
-            ("minutes", Schema.number()),
-            ("intensity", Schema.enumeration(["low", "moderate", "high"])),
-            ("whyAr", Schema.string("Why this fits the user, Egyptian Arabic, one sentence")),
-            ("whyEn", Schema.string("Same in English")),
-            ("youtubeQuery", Schema.string("YouTube search query for a good follow-along video"))
+    public static let workoutsSchema = JSONSchema.object([
+        ("items", JSONSchema.array(JSONSchema.object([
+            ("titleAr", JSONSchema.string()),
+            ("titleEn", JSONSchema.string()),
+            ("minutes", JSONSchema.number()),
+            ("intensity", JSONSchema.enumeration(["low", "moderate", "high"])),
+            ("whyAr", JSONSchema.string("Why this fits the user, Egyptian Arabic, one sentence")),
+            ("whyEn", JSONSchema.string("Same in English")),
+            ("youtubeQuery", JSONSchema.string("YouTube search query for a good follow-along video"))
         ]), description: "3 to 5 workouts"))
     ])
 

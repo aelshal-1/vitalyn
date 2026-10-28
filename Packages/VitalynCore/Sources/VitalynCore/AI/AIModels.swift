@@ -146,6 +146,12 @@ public struct MealLog: Codable, Sendable, Equatable {
     public var titleAr: String
     public var titleEn: String
     public var items: [AnalyzedFood]
+
+    public init(titleAr: String, titleEn: String, items: [AnalyzedFood]) {
+        self.titleAr = titleAr
+        self.titleEn = titleEn
+        self.items = items
+    }
 }
 
 public struct VideoSuggestion: Codable, Sendable, Equatable, Identifiable {
@@ -153,6 +159,12 @@ public struct VideoSuggestion: Codable, Sendable, Equatable, Identifiable {
     public var titleAr: String
     public var titleEn: String
     public var query: String
+
+    public init(titleAr: String, titleEn: String, query: String) {
+        self.titleAr = titleAr
+        self.titleEn = titleEn
+        self.query = query
+    }
 
     public var youtubeURL: URL {
         var components = URLComponents(string: "https://www.youtube.com/results")!
@@ -230,6 +242,11 @@ public struct WeekPlan: Codable, Sendable, Equatable {
 public struct DailyTip: Codable, Sendable, Equatable {
     public var tipAr: String
     public var tipEn: String
+
+    public init(tipAr: String, tipEn: String) {
+        self.tipAr = tipAr
+        self.tipEn = tipEn
+    }
 }
 
 public struct WorkoutSuggestion: Codable, Sendable, Equatable {

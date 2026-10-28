@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
 import VitalynCore
@@ -8,6 +9,8 @@ struct VitalynWidgetBundle: WidgetBundle {
         FuelWidget()
         StreakWidget()
         StepsWidget()
+        WaterWidget()
+        JourneyWidget()
     }
 }
 
@@ -184,6 +187,98 @@ struct StepsWidgetView: View {
                 .font(.system(size: 11))
         }
         .foregroundStyle(.white)
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+}
+
+// MARK: - Water (interactive)
+
+struct WaterWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "water", provider: SnapshotProvider()) { entry in
+            WaterWidgetView(snapshot: entry.snapshot)
+                .containerBackground(Color(hex: 0xE6F0FF), for: .widget)
+        }
+        .configurationDisplayName("مية · Water")
+        .description("دوس + عشان تضيف كوباية · Tap + to add a glass")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+struct WaterWidgetView: View {
+    let snapshot: TodaySnapshot
+
+    var body: some View {
+        let glasses = Calendar.current.isDateInToday(snapshot.date) ? snapshot.waterGlasses : 0
+        let fraction = snapshot.waterGoal > 0 ? min(1, Double(glasses) / Double(snapshot.waterGoal)) : 0
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(hex: 0xBFD6FF))
+                    .frame(height: proxy.size.height * fraction)
+                    .padding(-20)
+                VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("مية").font(.system(size: 12, weight: .semibold))
+                        Text("Water").font(.system(size: 11))
+                    }
+                    Spacer()
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(glasses)").font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("/\(snapshot.waterGoal)").font(.system(size: 16, weight: .medium, design: .rounded))
+                    }
+                    .environment(\.layoutDirection, .leftToRight)
+                    Button(intent: AddWaterIntent()) {
+                        Text("+ كوباية · glass")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(VColor.electric)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .foregroundStyle(Color(hex: 0x0D2A66))
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+}
+
+// MARK: - Journey
+
+struct JourneyWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "journey", provider: SnapshotProvider()) { entry in
+            JourneyWidgetView(snapshot: entry.snapshot)
+                .containerBackground(Color(hex: 0x0D3B2B), for: .widget)
+        }
+        .configurationDisplayName("رحلتي · My journey")
+        .description("الوزن والتغيير من البداية · Weight and change since you started")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+struct JourneyWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let snapshot: TodaySnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("رحلتي").font(.system(size: 12, weight: .semibold))
+                Text("My journey").font(.system(size: 11))
+            }
+            .foregroundStyle(Color(hex: 0x9FF0C6))
+            Spacer()
+            Text((snapshot.weightChangeKg <= 0 ? "−" : "+") + String(format: "%.1f", abs(snapshot.weightChangeKg)) + " kg")
+                .font(.system(size: family == .systemSmall ? 34 : 44, weight: .bold, design: .rounded))
+                .foregroundStyle(VColor.lime)
+                .environment(\.layoutDirection, .leftToRight)
+            Text("دلوقتي · now " + String(format: "%.1f", snapshot.weightKg) + " kg")
+                .font(.system(size: 11))
+                .foregroundStyle(Color(hex: 0xCFE5DA))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.layoutDirection, .rightToLeft)
     }
 }

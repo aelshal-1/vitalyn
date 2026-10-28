@@ -80,3 +80,27 @@ public enum SnapshotStore {
         return try? JSONDecoder().decode(TodaySnapshot.self, from: data)
     }
 }
+
+/// Today's water glasses, shared by the app and the interactive water widget.
+public enum WaterStore {
+    static func key(for date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return "water-\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+    }
+
+    public static func glasses(on date: Date = Date(), suiteName: String = SnapshotStore.appGroup) -> Int {
+        UserDefaults(suiteName: suiteName)?.integer(forKey: key(for: date)) ?? 0
+    }
+
+    @discardableResult
+    public static func add(_ count: Int = 1, on date: Date = Date(), suiteName: String = SnapshotStore.appGroup) -> Int {
+        guard let defaults = UserDefaults(suiteName: suiteName) else { return 0 }
+        let value = max(0, defaults.integer(forKey: key(for: date)) + count)
+        defaults.set(value, forKey: key(for: date))
+        if var snapshot = SnapshotStore.load(suiteName: suiteName), Calendar.current.isDate(snapshot.date, inSameDayAs: date) {
+            snapshot.waterGlasses = value
+            SnapshotStore.save(snapshot, suiteName: suiteName)
+        }
+        return value
+    }
+}

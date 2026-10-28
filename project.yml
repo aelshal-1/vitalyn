@@ -1,0 +1,104 @@
+# Vitalyn — XcodeGen spec.
+# The .xcodeproj is generated from this file (`xcodegen generate`) and is not committed.
+
+name: Vitalyn
+
+options:
+  bundleIdPrefix: com.elshal
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: ar
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  VitalynCore:
+    path: Packages/VitalynCore
+
+targets:
+  Vitalyn:
+    type: application
+    platform: iOS
+    sources:
+      - path: Vitalyn
+      - path: Shared
+    dependencies:
+      - package: VitalynCore
+      - target: VitalynWidgets
+    entitlements:
+      path: Vitalyn/Vitalyn.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.security.application-groups:
+          - group.com.elshal.vitalyn
+    info:
+      path: Vitalyn/Info.plist
+      properties:
+        CFBundleDisplayName: Vitalyn
+        LSApplicationCategoryType: public.app-category.healthcare-fitness
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIAppFonts:
+          - ReadexPro.ttf
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSHealthShareUsageDescription: "Vitalyn يقرأ خطواتك ونشاطك ووزنك من Apple Health عشان يحسب احتياجك اليومي. · Vitalyn reads your steps, activity and weight from Apple Health to calculate your daily needs."
+        NSHealthUpdateUsageDescription: "Vitalyn يسجل وزنك وتمارينك في Apple Health. · Vitalyn saves your weight and workouts to Apple Health."
+        NSCameraUsageDescription: "لتصوير الوجبات وورقة InBody والمنتجات. · To photograph meals, InBody sheets and products."
+        NSMicrophoneUsageDescription: "عشان تكلم المدرب بالصوت. · To talk to the coach by voice."
+        NSSpeechRecognitionUsageDescription: "لتحويل كلامك لنص للمدرب. · To turn your voice into text for the coach."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elshal.vitalyn
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  VitalynWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: VitalynWidgets
+      - path: Shared
+    dependencies:
+      - package: VitalynCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    entitlements:
+      path: VitalynWidgets/VitalynWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.elshal.vitalyn
+    info:
+      path: VitalynWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Vitalyn
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elshal.vitalyn.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+schemes:
+  Vitalyn:
+    build:
+      targets:
+        Vitalyn: all
+        VitalynWidgets: all
+    archive:
+      config: Release

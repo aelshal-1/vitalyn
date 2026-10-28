@@ -4,6 +4,7 @@
 
 - الخطة الكاملة: [docs/PLAN.md](docs/PLAN.md)
 - إعداد Apple + GitHub + TestFlight: [docs/SETUP.md](docs/SETUP.md)
+- تجربة التطبيق: [docs/TESTING.md](docs/TESTING.md)
 
 ## تركيبة المشروع
 
@@ -13,7 +14,7 @@
 | `Vitalyn/` | تطبيق iPhone/iPad (SwiftUI) |
 | `VitalynWidgets/` | الـ Widgets (WidgetKit) |
 | `Shared/` | الألوان والخطوط والمكونات المشتركة بين التطبيق والـ Widgets |
-| `Packages/VitalynCore/` | المنطق (حسابات السعرات والماكروز، بيانات اليوم) + الـ unit tests |
+| `Packages/VitalynCore/` | المنطق: Claude API client، الـ prompts والـ schemas، حسابات السعرات والماكروز، الإنجازات، الباركود + الـ unit tests |
 | `fastlane/` | البناء والرفع لـ TestFlight |
 | `.github/workflows/` | `ci.yml` (build + tests على كل push) و `testflight.yml` (رفع على TestFlight) |
 

@@ -87,3 +87,34 @@ import Testing
         UserDefaults().removePersistentDomain(forName: suite)
     }
 }
+
+@Suite struct IdealWeightTests {
+    @Test func healthyRangeForHeight() {
+        let ideal = NutritionCalculator.idealWeight(heightCm: 178, ageYears: 34, sex: .male, currentWeightKg: 96.4)
+        #expect(ideal.healthyLowKg == 58.5)
+        #expect(ideal.healthyHighKg == 79)
+        // BMI 22.5 × 1.78² = 71.3 → 71.5
+        #expect(ideal.goalKg == 71.5)
+        #expect(!ideal.alreadyThere)
+    }
+
+    @Test func targetRisesWithAgeAndDropsForWomen() {
+        let young = NutritionCalculator.idealWeight(heightCm: 170, ageYears: 25, sex: .male, currentWeightKg: 90)
+        let older = NutritionCalculator.idealWeight(heightCm: 170, ageYears: 60, sex: .male, currentWeightKg: 90)
+        let woman = NutritionCalculator.idealWeight(heightCm: 170, ageYears: 25, sex: .female, currentWeightKg: 90)
+        #expect(older.goalKg > young.goalKg)
+        #expect(woman.goalKg < young.goalKg)
+    }
+
+    @Test func bodyFatKeepsLeanMass() {
+        // 96.4 kg at 31.2% fat → lean 66.3 kg; at 18% fat → 80.9 kg, capped at BMI 24.9 (79 kg).
+        let ideal = NutritionCalculator.idealWeight(heightCm: 178, ageYears: 34, sex: .male, currentWeightKg: 96.4, bodyFatPercent: 31.2)
+        #expect(ideal.goalKg == 79)
+    }
+
+    @Test func neverAboveCurrentWeight() {
+        let ideal = NutritionCalculator.idealWeight(heightCm: 178, ageYears: 34, sex: .male, currentWeightKg: 68)
+        #expect(ideal.alreadyThere)
+        #expect(ideal.goalKg == 68)
+    }
+}

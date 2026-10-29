@@ -17,7 +17,7 @@ struct ProfileView: View {
                     if let profile = profiles.first {
                         TargetsPreview(profile: profile, scans: scans)
                         BasicsSection(profile: profile)
-                        GoalSection(profile: profile)
+                        GoalSection(profile: profile, currentWeightKg: AppData.currentWeight(profile: profile, scans: scans, health: health), bodyFatPercent: scans.last?.effectiveBodyFatPercent)
                         HealthSection(profile: profile)
                     }
                     ConnectionsSection()

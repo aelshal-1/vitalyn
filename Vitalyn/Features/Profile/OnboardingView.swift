@@ -31,6 +31,11 @@ struct OnboardingView: View {
                         BasicsSection(profile: profile)
                     case 1:
                         GoalSection(profile: profile)
+                            .onAppear {
+                                if profile.goalWeightKg == 0 {
+                                    profile.goalWeightKg = NutritionCalculator.idealWeight(heightCm: profile.heightCm, ageYears: profile.ageYears, sex: profile.sex, currentWeightKg: profile.startWeightKg).goalKg
+                                }
+                            }
                     case 2:
                         HealthSection(profile: profile)
                     default:
@@ -106,8 +111,8 @@ struct OnboardingView: View {
         case 1:
             if !(30...300).contains(profile.goalWeightKg) {
                 items.append(("اكتب الوزن المستهدف", "Enter your goal weight"))
-            } else if profile.goalWeightKg >= profile.startWeightKg {
-                items.append(("الهدف لازم يكون أقل من وزنك دلوقتي", "Goal must be below your current weight"))
+            } else if profile.goalWeightKg > profile.startWeightKg {
+                items.append(("الهدف لازم يكون أقل من وزنك دلوقتي أو قده", "Goal can't be above your current weight"))
             }
         default:
             break

@@ -52,12 +52,48 @@ struct BasicsSection: View {
 
 struct GoalSection: View {
     @Bindable var profile: UserProfile
+    var currentWeightKg: Double? = nil
+    var bodyFatPercent: Double? = nil
     private let paces: [Double] = [0.25, 0.5, 0.75, 1.0]
+
+    private var ideal: IdealWeight? {
+        let weight = currentWeightKg ?? profile.startWeightKg
+        guard profile.heightCm >= 120, weight >= 30, profile.birthYear >= 1930 else { return nil }
+        return NutritionCalculator.idealWeight(heightCm: profile.heightCm, ageYears: profile.ageYears, sex: profile.sex, currentWeightKg: weight, bodyFatPercent: bodyFatPercent)
+    }
 
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 16) {
                 SectionTitle(ar: "هدفك", en: "Your goal")
+                if let ideal {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            BiText(ar: "وزنك المثالي", en: "Your ideal weight", size: 14, weight: 500, color: VColor.primaryDark)
+                            Spacer()
+                            Text("\(VFormat.decimal(ideal.goalKg)) kg")
+                                .font(VFont.readex(22, weight: 700))
+                                .foregroundStyle(VColor.primaryDark)
+                                .environment(\.layoutDirection, .leftToRight)
+                        }
+                        Text("المدى الصحي لطولك \(VFormat.decimal(ideal.healthyLowKg))–\(VFormat.decimal(ideal.healthyHighKg)) كجم · Healthy range for your height \(VFormat.decimal(ideal.healthyLowKg))–\(VFormat.decimal(ideal.healthyHighKg)) kg")
+                            .font(VFont.readex(11))
+                            .foregroundStyle(VColor.inkSecondary)
+                        if ideal.alreadyThere {
+                            BiText(ar: "وزنك دلوقتي في المدى الصحي — ممكن تركز على الدهون والعضلات.", en: "You're already in the healthy range — focus on fat and muscle.", size: 12, weight: 400, color: VColor.inkSecondary)
+                        }
+                        if profile.goalWeightKg != ideal.goalKg {
+                            Button {
+                                profile.goalWeightKg = ideal.goalKg
+                            } label: {
+                                BiLabel(ar: "استخدمه كهدف", en: "Use as my goal", systemImage: "target", size: 13)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                    .padding(14)
+                    .background(VColor.primarySoft, in: RoundedRectangle(cornerRadius: 16))
+                }
                 NumberField(ar: "الوزن المستهدف", en: "Goal weight", value: $profile.goalWeightKg, unit: "kg")
                 VStack(alignment: .leading, spacing: 8) {
                     BiCaption(ar: "معدل النزول في الأسبوع", en: "Weekly pace")

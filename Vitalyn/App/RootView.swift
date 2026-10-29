@@ -72,7 +72,6 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 BilingualTabBar(selection: $tab)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
     }
 

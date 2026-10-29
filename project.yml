@@ -48,6 +48,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         ITSAppUsesNonExemptEncryption: false
+        UIUserInterfaceStyle: Light
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIAppFonts:

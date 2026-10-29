@@ -13,6 +13,8 @@ struct VitalynApp: App {
         WindowGroup {
             RootView()
                 .environment(\.layoutDirection, .rightToLeft)
+                // The design is light-only for now; without this, dark mode turns input text white.
+                .preferredColorScheme(.light)
                 .tint(VColor.primary)
                 .environment(health)
                 .environment(ai)

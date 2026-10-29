@@ -23,6 +23,11 @@ struct ProfileView: View {
                     }
                     ConnectionsSection()
                     BiText(ar: "Vitalyn بيساعدك تتابع وتنظم، لكنه مش بديل عن الدكتور. أي تغيير في الأدوية أو الأكل مع مرض مزمن لازم يكون بموافقة دكتورك.", en: "Vitalyn helps you track and plan — it doesn’t replace your doctor. Check medication or diet changes with them.", size: 12, weight: 400, color: VColor.inkSecondary)
+                    Text(Self.versionText)
+                        .font(VFont.readex(11))
+                        .foregroundStyle(VColor.muted)
+                        .frame(maxWidth: .infinity)
+                        .environment(\.layoutDirection, .leftToRight)
                 }
                 .padding(20)
                 .frame(maxWidth: 680)
@@ -35,6 +40,15 @@ struct ProfileView: View {
                 AppData.publishSnapshot(context, health: health)
             }
         }
+    }
+}
+
+extension ProfileView {
+    static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "Vitalyn \(version) (build \(build))"
     }
 }
 

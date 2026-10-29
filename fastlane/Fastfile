@@ -1,19 +1,24 @@
 default_platform(:ios)
 
+# Secrets pasted into GitHub sometimes carry spaces, line breaks or quotes.
+def clean_env(name)
+  ENV.fetch(name).to_s.strip.delete("\"'").gsub(/\s+/, "")
+end
+
 platform :ios do
   desc "Build, sign (cloud-managed, automatic) and upload to TestFlight"
   lane :beta do
     api_key = app_store_connect_api_key(
-      key_id: ENV.fetch("ASC_KEY_ID"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_id: clean_env("ASC_KEY_ID"),
+      issuer_id: clean_env("ASC_ISSUER_ID"),
       key_filepath: ENV.fetch("ASC_KEY_PATH")
     )
 
     auth = [
       "-allowProvisioningUpdates",
       "-authenticationKeyPath #{ENV.fetch('ASC_KEY_PATH')}",
-      "-authenticationKeyID #{ENV.fetch('ASC_KEY_ID')}",
-      "-authenticationKeyIssuerID #{ENV.fetch('ASC_ISSUER_ID')}"
+      "-authenticationKeyID #{clean_env('ASC_KEY_ID')}",
+      "-authenticationKeyIssuerID #{clean_env('ASC_ISSUER_ID')}"
     ].join(" ")
 
     build_app(
@@ -23,9 +28,9 @@ platform :ios do
       export_method: "app-store",
       export_options: {
         signingStyle: "automatic",
-        teamID: ENV.fetch("APPLE_TEAM_ID")
+        teamID: clean_env("APPLE_TEAM_ID")
       },
-      xcargs: "#{auth} DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')} CURRENT_PROJECT_VERSION=#{ENV.fetch('BUILD_NUMBER', '1')}",
+      xcargs: "#{auth} DEVELOPMENT_TEAM=#{clean_env('APPLE_TEAM_ID')} CURRENT_PROJECT_VERSION=#{ENV.fetch('BUILD_NUMBER', '1')}",
       export_xcargs: auth,
       output_directory: "build",
       clean: true
@@ -40,8 +45,8 @@ platform :ios do
   desc "Check the App Store Connect API key and what the account has (no secrets printed)"
   lane :doctor do
     app_store_connect_api_key(
-      key_id: ENV.fetch("ASC_KEY_ID"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_id: clean_env("ASC_KEY_ID"),
+      issuer_id: clean_env("ASC_ISSUER_ID"),
       key_filepath: ENV.fetch("ASC_KEY_PATH")
     )
     begin

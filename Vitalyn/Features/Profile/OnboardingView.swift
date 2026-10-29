@@ -11,6 +11,7 @@ struct OnboardingView: View {
     @State private var profile = UserProfile()
     @State private var step = 0
     @State private var apiKey = ""
+    @State private var prepared = false
     let onFinish: () -> Void
 
     private let steps = 4
@@ -41,6 +42,21 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity)
             }
 
+            if !missing.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(missing, id: \.en) { item in
+                        Label {
+                            Text("\(item.ar) · \(item.en)").font(VFont.readex(12))
+                        } icon: {
+                            Image(systemName: "exclamationmark.circle")
+                        }
+                        .foregroundStyle(VColor.energy)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+            }
+
             HStack(spacing: 10) {
                 if step > 0 {
                     Button { withAnimation { step -= 1 } } label: {
@@ -57,16 +73,44 @@ struct OnboardingView: View {
                 } label: {
                     BiLabel(ar: step < steps - 1 ? "التالي" : "يلا نبدأ", en: step < steps - 1 ? "Next" : "Let’s start")
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(color: missing.isEmpty ? VColor.primary : VColor.muted))
+                .disabled(!missing.isEmpty)
             }
             .padding(20)
         }
         .background(VColor.ground)
         .task {
+            // Start empty so nothing is accepted without the user entering it.
+            if !prepared {
+                prepared = true
+                profile.heightCm = 0
+                profile.startWeightKg = 0
+                profile.goalWeightKg = 0
+            }
             let hints = health.profileHints()
             if let sex = hints.sex { profile.sex = sex }
             if let year = hints.birthYear { profile.birthYear = year }
         }
+    }
+
+    /// What the current step still needs before Next is enabled.
+    private var missing: [(ar: String, en: String)] {
+        var items: [(ar: String, en: String)] = []
+        switch step {
+        case 0:
+            if profile.name.trimmingCharacters(in: .whitespaces).isEmpty { items.append(("اكتب اسمك", "Enter your name")) }
+            if !(120...230).contains(profile.heightCm) { items.append(("اكتب طولك (120–230 سم)", "Enter your height (120–230 cm)")) }
+            if !(30...300).contains(profile.startWeightKg) { items.append(("اكتب وزنك (30–300 كجم)", "Enter your weight (30–300 kg)")) }
+        case 1:
+            if !(30...300).contains(profile.goalWeightKg) {
+                items.append(("اكتب الوزن المستهدف", "Enter your goal weight"))
+            } else if profile.goalWeightKg >= profile.startWeightKg {
+                items.append(("الهدف لازم يكون أقل من وزنك دلوقتي", "Goal must be below your current weight"))
+            }
+        default:
+            break
+        }
+        return items
     }
 
     private var welcome: some View {

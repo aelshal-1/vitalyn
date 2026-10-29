@@ -109,7 +109,7 @@ struct SectionTitle: View {
     }
 }
 
-/// Labelled number field with a unit.
+/// Labelled number field with a unit. Empty when the value is 0; accepts Arabic digits and decimal commas.
 struct NumberField: View {
     let ar: String
     let en: String
@@ -117,19 +117,46 @@ struct NumberField: View {
     var unit: String = ""
     var digits: Int = 1
 
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
     var body: some View {
         HStack {
             BiText(ar: ar, en: en, size: 14, weight: 500)
             Spacer()
-            TextField("0", value: $value, format: .number.precision(.fractionLength(0...digits)).locale(Locale(identifier: "en_US")))
+            TextField("0", text: $text)
                 .keyboardType(.decimalPad)
+                .focused($focused)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 90)
                 .font(VFont.readex(16, weight: 600))
+                .foregroundStyle(VColor.ink)
+                .environment(\.layoutDirection, .leftToRight)
             if !unit.isEmpty {
                 Text(unit).font(VFont.readex(12)).foregroundStyle(VColor.muted)
             }
         }
+        .onAppear { text = Self.display(value, digits: digits) }
+        .onChange(of: text) { _, newText in
+            value = Self.parse(newText) ?? 0
+        }
+        .onChange(of: value) { _, newValue in
+            if !focused { text = Self.display(newValue, digits: digits) }
+        }
+    }
+
+    static func display(_ value: Double, digits: Int) -> String {
+        guard value != 0 else { return "" }
+        return value.formatted(.number.precision(.fractionLength(0...digits)).grouping(.never).locale(Locale(identifier: "en_US")))
+    }
+
+    static func parse(_ text: String) -> Double? {
+        let arabicDigits: [Character: Character] = [
+            "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+            "٫": ".", ",": ".", "،": "."
+        ]
+        let normalized = String(text.map { arabicDigits[$0] ?? $0 }).trimmingCharacters(in: .whitespaces)
+        return Double(normalized)
     }
 }
 

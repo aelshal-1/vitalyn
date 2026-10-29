@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import VitalynCore
 
-/// First-launch setup: about you → goal → health → connections.
+/// First-launch setup: Apple Health + Claude key → about you (prefilled from Health) → goal → health.
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
     @Environment(HealthService.self) private var health
@@ -12,6 +12,8 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var apiKey = ""
     @State private var prepared = false
+    @State private var imported: HealthService.HealthProfile?
+    @State private var importing = false
     let onFinish: () -> Void
 
     private let steps = 4
@@ -28,9 +30,21 @@ struct OnboardingView: View {
                     switch step {
                     case 0:
                         welcome
-                        BasicsSection(profile: profile)
+                        connections
                     case 1:
-                        GoalSection(profile: profile)
+                        if let imported, !imported.isEmpty {
+                            Label {
+                                BiText(ar: "جبنا البيانات دي من Apple Health — راجعها وعدّل أي حاجة.", en: "Filled in from Apple Health — review and edit anything.", size: 12, weight: 500, color: VColor.primaryDark)
+                            } icon: {
+                                Image(systemName: "heart.fill").foregroundStyle(Color(hex: 0xC2264B))
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(VColor.primarySoft, in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        BasicsSection(profile: profile)
+                    case 2:
+                        GoalSection(profile: profile, bodyFatPercent: imported?.bodyFatPercent)
                             .onAppear {
                                 if profile.goalWeightKg == 0 {
                                     profile.goalWeightKg = NutritionCalculator.idealWeight(heightCm: profile.heightCm, ageYears: profile.ageYears, sex: profile.sex, currentWeightKg: profile.startWeightKg).goalKg
@@ -39,8 +53,6 @@ struct OnboardingView: View {
                                     }
                                 }
                             }
-                    case 2:
-                        connections
                     default:
                         HealthSection(profile: profile)
                         TargetsPreview(profile: profile)
@@ -75,7 +87,7 @@ struct OnboardingView: View {
                 }
                 Button {
                     if step < steps - 1 {
-                        if step == 2, !apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if step == 0, !apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
                             ai.setKey(apiKey)
                         }
                         withAnimation { step += 1 }
@@ -100,9 +112,7 @@ struct OnboardingView: View {
                 profile.goalWeightKg = 0
                 profile.birthYear = 0
             }
-            let hints = health.profileHints()
-            if let sex = hints.sex { profile.sex = sex }
-            if let year = hints.birthYear { profile.birthYear = year }
+            if health.requested, imported == nil { await importFromHealth() }
         }
     }
 
@@ -110,12 +120,12 @@ struct OnboardingView: View {
     private var missing: [(ar: String, en: String)] {
         var items: [(ar: String, en: String)] = []
         switch step {
-        case 0:
+        case 1:
             if profile.name.trimmingCharacters(in: .whitespaces).isEmpty { items.append(("اكتب اسمك", "Enter your name")) }
             if !(1930...2012).contains(profile.birthYear) { items.append(("اختار سنة ميلادك", "Choose your birth year")) }
             if !(120...230).contains(profile.heightCm) { items.append(("اكتب طولك (120–230 سم)", "Enter your height (120–230 cm)")) }
             if !(30...300).contains(profile.startWeightKg) { items.append(("اكتب وزنك (30–300 كجم)", "Enter your weight (30–300 kg)")) }
-        case 1:
+        case 2:
             if !(30...300).contains(profile.goalWeightKg) {
                 items.append(("اكتب الوزن المستهدف", "Enter your goal weight"))
             } else if profile.goalWeightKg > profile.startWeightKg {
@@ -144,12 +154,30 @@ struct OnboardingView: View {
                     SectionTitle(ar: "Apple Health", en: "Apple Health")
                     BiText(ar: "عشان ناخد خطواتك ونشاطك ووزنك، ونسجل وجباتك وتمارينك.", en: "To read steps, activity and weight, and save your meals and workouts.", size: 13, weight: 400, color: VColor.inkSecondary)
                     Button {
-                        Task { await health.requestAuthorization() }
+                        Task {
+                            await health.requestAuthorization()
+                            await importFromHealth()
+                        }
                     } label: {
                         BiLabel(ar: health.requested ? "متصل" : "اربط Apple Health", en: health.requested ? "Connected" : "Connect Apple Health", systemImage: health.requested ? "checkmark.circle.fill" : "heart.fill")
                     }
                     .buttonStyle(PrimaryButtonStyle(color: health.requested ? VColor.primaryDark : Color(hex: 0xC2264B)))
                     .disabled(!health.isAvailable)
+                    if importing { ProgressView() }
+                    if let imported {
+                        if imported.isEmpty {
+                            BiText(ar: "Apple Health مفيهوش بيانات عنك لسه — هتكتبها في الخطوة الجاية.", en: "Apple Health has no profile data yet — you'll enter it next.", size: 12, weight: 400, color: VColor.inkSecondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                BiCaption(ar: "جبنا من Apple Health", en: "Imported from Apple Health", color: VColor.primaryDark)
+                                if let value = imported.heightCm { importedRow("الطول", "Height", "\(VFormat.number(Int(value.rounded()))) cm") }
+                                if let value = imported.weightKg { importedRow("الوزن", "Weight", "\(VFormat.decimal(value)) kg") }
+                                if let value = imported.bodyFatPercent { importedRow("نسبة الدهون", "Body fat", "\(VFormat.decimal(value))%") }
+                                if let value = imported.birthYear { importedRow("سنة الميلاد", "Birth year", String(value)) }
+                                if let value = imported.sex { importedRow("النوع", "Sex", value == .male ? "راجل · Male" : "ست · Female") }
+                            }
+                        }
+                    }
                 }
             }
             Card {
@@ -166,6 +194,27 @@ struct OnboardingView: View {
                 }
             }
         }
+    }
+
+    private func importedRow(_ ar: String, _ en: String, _ value: String) -> some View {
+        HStack {
+            Text("\(ar) · \(en)").font(VFont.readex(12)).foregroundStyle(VColor.inkSecondary)
+            Spacer()
+            Text(value).font(VFont.readex(13, weight: 600)).foregroundStyle(VColor.ink)
+                .environment(\.layoutDirection, .leftToRight)
+        }
+    }
+
+    /// Fills empty profile fields from Health; the user reviews and edits them on the next step.
+    private func importFromHealth() async {
+        importing = true
+        let data = await health.profileFromHealth()
+        if let value = data.heightCm, profile.heightCm == 0 { profile.heightCm = value.rounded() }
+        if let value = data.weightKg, profile.startWeightKg == 0 { profile.startWeightKg = (value * 10).rounded() / 10 }
+        if let value = data.birthYear, profile.birthYear == 0 { profile.birthYear = value }
+        if let value = data.sex { profile.sex = value }
+        imported = data
+        importing = false
     }
 
     private func finish() {

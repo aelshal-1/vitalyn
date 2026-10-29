@@ -15,6 +15,8 @@ struct VitalynApp: App {
                 .environment(\.layoutDirection, .rightToLeft)
                 // The design is light-only for now; without this, dark mode turns input text white.
                 .preferredColorScheme(.light)
+                // Western digits (1,770 not ١٬٧٧٠) everywhere, as in the design; dates pass their own locale.
+                .environment(\.locale, Locale(identifier: "en_US"))
                 .tint(VColor.primary)
                 .environment(health)
                 .environment(ai)

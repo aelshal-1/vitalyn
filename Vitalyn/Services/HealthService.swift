@@ -197,6 +197,29 @@ final class HealthService {
         await latest(.height, unit: .meterUnit(with: .centi))?.value
     }
 
+    struct HealthProfile {
+        var heightCm: Double?
+        var weightKg: Double?
+        var bodyFatPercent: Double?
+        var sex: Sex?
+        var birthYear: Int?
+
+        var isEmpty: Bool { heightCm == nil && weightKg == nil && bodyFatPercent == nil && sex == nil && birthYear == nil }
+    }
+
+    /// Everything Health knows that the profile needs.
+    func profileFromHealth() async -> HealthProfile {
+        guard isAvailable, requested else { return HealthProfile() }
+        let hints = profileHints()
+        return HealthProfile(
+            heightCm: await latest(.height, unit: .meterUnit(with: .centi))?.value,
+            weightKg: await latest(.bodyMass, unit: .gramUnit(with: .kilo))?.value,
+            bodyFatPercent: await latest(.bodyFatPercentage, unit: .percent()).map { $0.value * 100 },
+            sex: hints.sex,
+            birthYear: hints.birthYear
+        )
+    }
+
     // MARK: Writing
 
     func saveBody(weightKg: Double, bodyFatPercent: Double?, leanMassKg: Double?, date: Date) async {

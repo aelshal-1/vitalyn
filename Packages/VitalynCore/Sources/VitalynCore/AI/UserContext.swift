@@ -22,6 +22,8 @@ public struct UserContext: Sendable, Equatable {
     public var activeCaloriesToday: Int
     public var latestInBody: String?
     public var weightTrend: String?
+    /// Lines describing identified conditions/medications/allergies and what they mean for diet and exercise.
+    public var healthInsights: [String]
 
     public init(
         name: String = "",
@@ -43,7 +45,8 @@ public struct UserContext: Sendable, Equatable {
         stepsToday: Int = 0,
         activeCaloriesToday: Int = 0,
         latestInBody: String? = nil,
-        weightTrend: String? = nil
+        weightTrend: String? = nil,
+        healthInsights: [String] = []
     ) {
         self.name = name
         self.ageYears = ageYears
@@ -65,6 +68,7 @@ public struct UserContext: Sendable, Equatable {
         self.activeCaloriesToday = activeCaloriesToday
         self.latestInBody = latestInBody
         self.weightTrend = weightTrend
+        self.healthInsights = healthInsights
     }
 
     public func promptText(today: Date = Date()) -> String {
@@ -86,6 +90,7 @@ public struct UserContext: Sendable, Equatable {
         if !medications.isEmpty { lines.append("- Medications: \(medications)") }
         if !allergies.isEmpty { lines.append("- Food allergies / intolerances: \(allergies) — never suggest these") }
         if !preferences.isEmpty { lines.append("- Food preferences: \(preferences.joined(separator: "; "))") }
+        for insight in healthInsights { lines.append("- \(insight)") }
 
         lines.append("## Daily targets (calculated by the app — use these, do not invent new targets)")
         lines.append("- \(targets.calories) kcal, protein \(targets.proteinGrams) g, carbs \(targets.carbsGrams) g, fat \(targets.fatGrams) g")

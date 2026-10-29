@@ -40,9 +40,10 @@ struct OnboardingView: View {
                                 }
                             }
                     case 2:
-                        HealthSection(profile: profile)
-                    default:
                         connections
+                    default:
+                        HealthSection(profile: profile)
+                        TargetsPreview(profile: profile)
                     }
                 }
                 .padding(20)
@@ -74,6 +75,9 @@ struct OnboardingView: View {
                 }
                 Button {
                     if step < steps - 1 {
+                        if step == 2, !apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
+                            ai.setKey(apiKey)
+                        }
                         withAnimation { step += 1 }
                     } else {
                         finish()
@@ -161,7 +165,6 @@ struct OnboardingView: View {
                         .environment(\.layoutDirection, .leftToRight)
                 }
             }
-            TargetsPreview(profile: profile)
         }
     }
 

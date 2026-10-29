@@ -120,10 +120,13 @@ struct GoalSection: View {
 
 struct HealthSection: View {
     @Bindable var profile: UserProfile
+    @Environment(AIService.self) private var ai
+    @State private var identifying = false
+    @State private var identifyError: String?
 
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 SectionTitle(ar: "الأمراض المزمنة", en: "Chronic conditions")
                 BiText(ar: "اختار اللي عندك — Claude هياخدها في اعتباره في كل اقتراح.", en: "Pick yours — Claude considers them in every suggestion.", size: 12, weight: 400, color: VColor.inkSecondary)
                 FlowLayout(spacing: 8) {
@@ -138,54 +141,136 @@ struct HealthSection: View {
                         }
                     }
                 }
-                field(ar: "أمراض تانية", en: "Other conditions", text: $profile.otherConditions)
-                field(ar: "الأدوية", en: "Medications", text: $profile.medications)
-                field(ar: "حساسية من أكل", en: "Food allergies", text: $profile.allergies)
-                PreferencesEditor(preferences: $profile.preferences)
+                TagListEditor(ar: "أمراض تانية", en: "Other conditions", placeholder: "مثلاً: WPW · e.g. asthma",
+                              items: listBinding(\.otherConditions), onAdd: { _ in identifyMissing() })
+                TagListEditor(ar: "الأدوية", en: "Medications", placeholder: "مثلاً: Concor 5 · e.g. Metformin",
+                              items: listBinding(\.medications), onAdd: { _ in identifyMissing() })
+                TagListEditor(ar: "حساسية من أكل", en: "Food allergies", placeholder: "مثلاً: لاكتوز · e.g. peanuts",
+                              items: listBinding(\.allergies), onAdd: { _ in identifyMissing() })
+                insights
+                TagListEditor(ar: "ذوقك في الأكل", en: "Food preferences", placeholder: "مثلاً: بحب الفراخ · e.g. I like chicken",
+                              items: $profile.preferences)
             }
         }
     }
 
-    private func field(ar: String, en: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            BiCaption(ar: ar, en: en)
-            TextField("\(ar) · \(en)", text: text, axis: .vertical)
-                .font(VFont.readex(14))
-                .padding(12)
-                .background(VColor.ground, in: RoundedRectangle(cornerRadius: 12))
+    private func listBinding(_ keyPath: ReferenceWritableKeyPath<UserProfile, String>) -> Binding<[String]> {
+        Binding(
+            get: { ProfileList.items(profile[keyPath: keyPath]) },
+            set: { profile[keyPath: keyPath] = ProfileList.text($0) }
+        )
+    }
+
+    @ViewBuilder
+    private var insights: some View {
+        let known = profile.currentHealthInsights
+        let pending = profile.healthItems.filter { item in !known.contains { $0.id == HealthItemInsight.key(item.0, item.1) } }
+        if !known.isEmpty || !pending.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label {
+                        BiCaption(ar: "Claude فهم كده", en: "What Claude understood", size: 12, color: VColor.primaryDark)
+                    } icon: {
+                        Image(systemName: "sparkles").foregroundStyle(VColor.primary)
+                    }
+                    Spacer()
+                    if identifying { ProgressView() }
+                }
+                ForEach(known) { insight in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Image(systemName: insight.recognized ? "checkmark.seal.fill" : "questionmark.circle.fill")
+                                .foregroundStyle(insight.recognized ? VColor.primary : Color(hex: 0xC2410C))
+                            Text("\(insight.input) ← \(insight.nameAr)").font(VFont.readex(13, weight: 600))
+                        }
+                        Text(insight.nameEn).font(VFont.readex(12, weight: 500)).foregroundStyle(VColor.inkSecondary)
+                        Text(insight.whatItIsAr).font(VFont.readex(12)).foregroundStyle(VColor.ink)
+                        Text(insight.whatItIsEn).font(VFont.readex(11)).foregroundStyle(VColor.inkSecondary)
+                        Text(insight.notesAr).font(VFont.readex(12)).foregroundStyle(VColor.ink)
+                        Text(insight.notesEn).font(VFont.readex(11)).foregroundStyle(VColor.inkSecondary)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(VColor.surface, in: RoundedRectangle(cornerRadius: 12))
+                }
+                if !pending.isEmpty {
+                    if ai.hasKey {
+                        Button(action: identifyMissing) {
+                            BiLabel(ar: "خلّي Claude يتعرف عليهم", en: "Let Claude identify them", systemImage: "sparkles", size: 13)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(identifying)
+                    } else {
+                        BiText(ar: "ضيف مفتاح Claude عشان يتعرف عليهم ويتأكد من الأسماء.", en: "Add your Claude key so it can identify them and check the names.", size: 11, weight: 400, color: VColor.muted)
+                    }
+                }
+                if let identifyError { Text(identifyError).font(VFont.readex(11)).foregroundStyle(VColor.energy) }
+            }
+            .padding(12)
+            .background(VColor.primarySoft, in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    /// Asks Claude about items that have no insight yet (all current items, so it can spot interactions).
+    private func identifyMissing() {
+        guard ai.hasKey, !identifying else { return }
+        let known = Set(profile.healthInsights.map(\.id))
+        let items = profile.healthItems
+        guard items.contains(where: { !known.contains(HealthItemInsight.key($0.0, $0.1)) }) else { return }
+        identifying = true
+        identifyError = nil
+        Task {
+            do {
+                let result = try await ai.run(HealthItemInsights.self, AITasks.identifyHealthItems(items, context: nil))
+                var merged = Dictionary(profile.healthInsights.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
+                for insight in result.items { merged[insight.id] = insight }
+                profile.healthInsights = Array(merged.values)
+            } catch {
+                identifyError = error.localizedDescription
+            }
+            identifying = false
         }
     }
 }
 
-struct PreferencesEditor: View {
-    @Binding var preferences: [String]
+/// Chips with an add field: one item per entry, tap a chip to remove it.
+struct TagListEditor: View {
+    let ar: String
+    let en: String
+    let placeholder: String
+    @Binding var items: [String]
+    var onAdd: (String) -> Void = { _ in }
     @State private var draft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            BiCaption(ar: "ذوقك في الأكل", en: "Food preferences")
-            FlowLayout(spacing: 8) {
-                ForEach(preferences, id: \.self) { item in
-                    Button {
-                        preferences.removeAll { $0 == item }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(item).font(VFont.readex(13))
-                            Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+            BiCaption(ar: ar, en: en)
+            if !items.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(items, id: \.self) { item in
+                        Button {
+                            items.removeAll { $0 == item }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(item).font(VFont.readex(13))
+                                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .foregroundStyle(VColor.primaryDark)
+                            .background(VColor.primarySoft, in: Capsule())
                         }
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .foregroundStyle(VColor.primaryDark)
-                        .background(VColor.primarySoft, in: Capsule())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(item) — امسح · remove")
                     }
-                    .buttonStyle(.plain)
                 }
             }
             HStack {
-                TextField("مثلاً: بحب الفراخ · e.g. I like chicken", text: $draft)
+                TextField(placeholder, text: $draft)
                     .font(VFont.readex(14))
+                    .foregroundStyle(VColor.ink)
                     .onSubmit(add)
-                Button(action: add) { Image(systemName: "plus.circle.fill").font(.system(size: 24)) }
+                Button(action: add) { Image(systemName: "plus.circle.fill").font(.system(size: 26)) }
                     .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                     .accessibilityLabel("ضيف — Add")
             }
@@ -196,9 +281,10 @@ struct PreferencesEditor: View {
 
     private func add() {
         let value = draft.trimmingCharacters(in: .whitespaces)
-        guard !value.isEmpty, !preferences.contains(value) else { return }
-        preferences.append(value)
+        guard !value.isEmpty, !items.contains(value) else { return }
+        items.append(value)
         draft = ""
+        onAdd(value)
     }
 }
 

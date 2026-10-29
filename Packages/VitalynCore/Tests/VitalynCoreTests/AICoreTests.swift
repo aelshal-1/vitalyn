@@ -260,3 +260,32 @@ import Testing
         UserDefaults().removePersistentDomain(forName: suite)
     }
 }
+
+@Suite struct HealthItemsTests {
+    @Test func listsRoundTrip() {
+        #expect(ProfileList.items("WPW\nAsthma; Gout،  ") == ["WPW", "Asthma", "Gout"])
+        #expect(ProfileList.text(["Concor", " ", "Aspirin "]) == "Concor\nAspirin")
+    }
+
+    @Test func identifyRequestListsItems() throws {
+        let request = AITasks.identifyHealthItems([(.condition, "WPW"), (.medication, "Beta core")], context: nil)
+        guard case let .text(text)? = request.messages.first?.content.first else {
+            Issue.record("expected a text message")
+            return
+        }
+        #expect(text.contains("- condition: WPW"))
+        #expect(text.contains("- medication: Beta core"))
+        #expect(JSONSchema.problems(in: request.schema).isEmpty)
+    }
+
+    @Test func insightsAppearInPrompt() {
+        let context = UserContext(ageYears: 34, sex: .male, heightCm: 178, weightKg: 96, goalWeightKg: 80, weeklyLossKg: 0.7,
+                                  activity: .light, targets: SampleData.targets,
+                                  healthInsights: ["Wolff-Parkinson-White syndrome (WPW): avoid stimulants"])
+        #expect(context.promptText().contains("Wolff-Parkinson-White"))
+    }
+
+    @Test func insightKeyIgnoresCaseAndSpaces() {
+        #expect(HealthItemInsight.key(.condition, " WPW ") == HealthItemInsight.key(.condition, "wpw"))
+    }
+}

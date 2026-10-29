@@ -99,7 +99,10 @@ enum AppData {
             stepsToday: health.stepsToday,
             activeCaloriesToday: health.activeKcalToday,
             latestInBody: scans.last?.promptSummary,
-            weightTrend: trend
+            weightTrend: trend,
+            healthInsights: profile.currentHealthInsights.map {
+                "\($0.nameEn) (typed \"\($0.input)\", \($0.kind.rawValue)): \($0.whatItIsEn) \($0.notesEn)"
+            }
         )
     }
 

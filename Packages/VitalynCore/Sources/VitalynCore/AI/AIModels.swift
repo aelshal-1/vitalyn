@@ -262,3 +262,29 @@ public struct WorkoutSuggestion: Codable, Sendable, Equatable {
 public struct WorkoutSuggestions: Codable, Sendable, Equatable {
     public var items: [WorkoutSuggestion]
 }
+
+public enum HealthItemKind: String, Codable, Sendable, CaseIterable {
+    case condition, medication, allergy
+}
+
+/// What Claude understood from something the user typed in their health profile ("WPW", "Concor", …).
+public struct HealthItemInsight: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { Self.key(kind, input) }
+    public var kind: HealthItemKind
+    public var input: String
+    public var recognized: Bool
+    public var nameAr: String
+    public var nameEn: String
+    public var whatItIsAr: String
+    public var whatItIsEn: String
+    public var notesAr: String
+    public var notesEn: String
+
+    public static func key(_ kind: HealthItemKind, _ input: String) -> String {
+        "\(kind.rawValue):\(input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+    }
+}
+
+public struct HealthItemInsights: Codable, Sendable, Equatable {
+    public var items: [HealthItemInsight]
+}

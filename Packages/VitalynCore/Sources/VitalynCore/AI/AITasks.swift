@@ -330,6 +330,40 @@ public enum AITasks {
         return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: workoutsSchema, effort: .low, maxTokens: 4000)
     }
 
+    // MARK: Health profile items
+
+    public static let healthItemsSchema = JSONSchema.object([
+        ("items", JSONSchema.array(JSONSchema.object([
+            ("kind", JSONSchema.enumeration(HealthItemKind.allCases.map(\.rawValue))),
+            ("input", JSONSchema.string("Exactly what the user typed")),
+            ("recognized", JSONSchema.boolean("True only if you are confident what this is")),
+            ("nameAr", JSONSchema.string("Proper name in Arabic; for medications the generic name and drug class")),
+            ("nameEn", JSONSchema.string("Proper name in English; for medications 'Brand (generic) — class'")),
+            ("whatItIsAr", JSONSchema.string("One plain sentence on what it is, Egyptian Arabic")),
+            ("whatItIsEn", JSONSchema.string("Same in English")),
+            ("notesAr", JSONSchema.string("The 1–3 most important diet/exercise considerations for a weight-loss program, Egyptian Arabic. If not recognized, ask the user to write the full name.")),
+            ("notesEn", JSONSchema.string("Same in English"))
+        ])))
+    ])
+
+    /// Identifies conditions, medications and allergies the user typed, including abbreviations,
+    /// Egyptian brand names and misspellings, and notes what matters for diet and exercise.
+    public static func identifyHealthItems(_ items: [(HealthItemKind, String)], context: UserContext?) -> AIRequest {
+        var system = persona + """
+
+        You help the user record their health profile accurately. Users type abbreviations, brand names common in Egypt \
+        and misspellings (e.g. "WPW" = Wolff-Parkinson-White syndrome; "Concor" = bisoprolol, a beta-blocker). \
+        Identify each item. If you are not confident, set recognized=false, give your best guess in the names, and ask for \
+        the full name in the notes. Point out interactions that matter for training and eating together with the user's \
+        other items (for example, beta-blockers blunt heart rate, so effort should be judged by perceived exertion). \
+        Never give dosing advice.
+        """
+        if let context { system += "\n\n" + context.promptText() }
+        let list = items.map { "- \($0.0.rawValue): \($0.1)" }.joined(separator: "\n")
+        let instruction = "Identify each of these items from the user's health profile and return one entry per item, in order:\n\(list)"
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: healthItemsSchema, effort: .medium, maxTokens: 6000)
+    }
+
     /// Every schema the app sends, for validation in tests.
     public static var allSchemas: [String: JSONValue] {
         [
@@ -340,7 +374,8 @@ public enum AITasks {
             "tip": tipSchema,
             "weekPlan": weekPlanSchema,
             "plannedMeal": plannedMealSchema,
-            "workouts": workoutsSchema
+            "workouts": workoutsSchema,
+            "healthItems": healthItemsSchema
         ]
     }
 }

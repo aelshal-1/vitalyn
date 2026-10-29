@@ -23,8 +23,28 @@ final class UserProfile {
     var stepsGoal: Int = 8000
     var waterGoal: Int = 8
     var createdAt: Date = Date()
+    /// JSON array of HealthItemInsight: what Claude understood from conditions, medications and allergies.
+    var healthInsightsData: Data = Data()
 
     init() {}
+
+    var healthInsights: [HealthItemInsight] {
+        get { (try? JSONDecoder().decode([HealthItemInsight].self, from: healthInsightsData)) ?? [] }
+        set { healthInsightsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    /// Items currently in the profile, by kind.
+    var healthItems: [(HealthItemKind, String)] {
+        ProfileList.items(otherConditions).map { (.condition, $0) }
+            + ProfileList.items(medications).map { (.medication, $0) }
+            + ProfileList.items(allergies).map { (.allergy, $0) }
+    }
+
+    /// Insights for items still in the profile.
+    var currentHealthInsights: [HealthItemInsight] {
+        let keys = Set(healthItems.map { HealthItemInsight.key($0.0, $0.1) })
+        return healthInsights.filter { keys.contains($0.id) }
+    }
 
     var sex: Sex {
         get { Sex(rawValue: sexRaw) ?? .male }

@@ -218,6 +218,8 @@ struct AvatarCaptureView: View {
     @Environment(\.modelContext) private var context
     @State private var index = 0
     @State private var showCamera = false
+    @State private var checking = false
+    @State private var problem: String?
 
     private let steps: [(PhotoKind, String, String, String)] = [
         (.faceFront, "بص للكاميرا على طول", "Look straight at the camera", "face.smiling"),
@@ -250,10 +252,22 @@ struct AvatarCaptureView: View {
                     Spacer()
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 70)).foregroundStyle(VColor.mint)
                     BiText(ar: "الصور اتحفظت", en: "Photos saved", size: 22, color: VColor.nightText, enColor: VColor.nightMuted, alignment: .center)
-                    BiText(ar: "هتشوف المقارنة قبل وبعد في شاشة جسمي.", en: "See the before & after on the My body screen.", size: 14, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
+                    BiText(ar: "هتشوف المقارنة قبل وبعد في شاشة جسمي. تحويل الصور لأفاتار 3D جاي في تحديث قريب.", en: "See the before & after on the My body screen. Turning these photos into a 3D avatar is coming in an update.", size: 14, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
                     Spacer()
                     Button { dismiss() } label: { BiLabel(ar: "تمام", en: "Done") }
                         .buttonStyle(PrimaryButtonStyle())
+                }
+                if checking {
+                    ProgressView().tint(VColor.mint)
+                }
+                if let problem {
+                    Text(problem)
+                        .font(VFont.readex(13, weight: 500))
+                        .foregroundStyle(Color(hex: 0xFFB4A0))
+                        .multilineTextAlignment(.center)
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(hex: 0x2A1A14), in: RoundedRectangle(cornerRadius: 14))
                 }
                 BiText(ar: "لبس ضيق وإضاءة كويسة بيدّوا نتيجة أدق. الصور بتفضل على أجهزتك.", en: "Fitted clothes and good light give better results. Photos stay on your devices.", size: 11, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
             }
@@ -269,8 +283,23 @@ struct AvatarCaptureView: View {
 
     private func save(_ image: UIImage) {
         guard index < steps.count else { return }
+        let kind = steps[index].0
+        checking = true
+        problem = nil
+        Task {
+            let result = await PhotoCheck.check(image, for: kind)
+            checking = false
+            if case let .problem(ar, en) = result {
+                problem = "\(ar)\n\(en)"
+                return
+            }
+            store(image, kind: kind)
+        }
+    }
+
+    private func store(_ image: UIImage, kind: PhotoKind) {
         let photo = ProgressPhoto()
-        photo.kindRaw = steps[index].0.rawValue
+        photo.kindRaw = kind.rawValue
         photo.image = ImageTools.jpeg(image, maxDimension: 1600, quality: 0.8)
         context.insert(photo)
         try? context.save()

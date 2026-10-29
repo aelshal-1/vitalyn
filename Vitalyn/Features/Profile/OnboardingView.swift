@@ -55,6 +55,7 @@ struct OnboardingView: View {
                             }
                     default:
                         HealthSection(profile: profile)
+                        MetabolismSection(profile: profile)
                         TargetsPreview(profile: profile)
                     }
                 }
@@ -266,5 +267,48 @@ struct TargetsPreview: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(Color(hex: 0x1C2F29), in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+/// Shows the BMR in use and lets the user enter their own measured value.
+struct MetabolismSection: View {
+    @Bindable var profile: UserProfile
+    var scans: [InBodyScan] = []
+    @Environment(HealthService.self) private var health
+
+    var body: some View {
+        let calculated = AppData.calculatedBMR(profile: profile, scans: scans, health: health)
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionTitle(ar: "معدل الحرق الأساسي (BMR)", en: "Basal metabolic rate (BMR)")
+                BiText(
+                    ar: "السعرات اللي جسمك بيحرقها وانت مرتاح. لو تعرف رقمك الحقيقي (من InBody أو دكتور) اكتبه هنا وهنحسب عليه.",
+                    en: "Calories your body burns at rest. If you know your real number (InBody or a doctor), enter it and we'll use it.",
+                    size: 12, weight: 400, color: VColor.inkSecondary
+                )
+                HStack {
+                    Text("\(calculated.sourceAr) · \(calculated.sourceEn)").font(VFont.readex(11)).foregroundStyle(VColor.muted)
+                    Spacer()
+                    Text("\(VFormat.number(calculated.kcal)) kcal").font(VFont.readex(14, weight: 600)).foregroundStyle(VColor.inkSecondary)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+                NumberField(ar: "الـ BMR بتاعي", en: "My BMR", value: $profile.manualBMR, unit: "kcal", digits: 0)
+                if profile.manualBMR > 0 {
+                    HStack {
+                        Label {
+                            BiCaption(ar: "بنستخدم رقمك", en: "Using your number", size: 11, color: VColor.primaryDark)
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(VColor.primary)
+                        }
+                        Spacer()
+                        Button("رجّع المحسوب · Use calculated") { profile.manualBMR = 0 }
+                            .font(VFont.readex(12, weight: 600))
+                    }
+                    if profile.manualBMR < 900 || profile.manualBMR > 3500 {
+                        BiText(ar: "الرقم ده غريب — اتأكد منه.", en: "That number looks unusual — please double-check.", size: 11, weight: 500, color: VColor.energy)
+                    }
+                }
+            }
+        }
     }
 }

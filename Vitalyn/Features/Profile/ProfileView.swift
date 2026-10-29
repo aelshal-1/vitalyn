@@ -19,6 +19,7 @@ struct ProfileView: View {
                         BasicsSection(profile: profile)
                         GoalSection(profile: profile, currentWeightKg: AppData.currentWeight(profile: profile, scans: scans, health: health), bodyFatPercent: scans.last?.effectiveBodyFatPercent)
                         HealthSection(profile: profile)
+                        MetabolismSection(profile: profile, scans: scans)
                     }
                     ConnectionsSection()
                     BiText(ar: "Vitalyn بيساعدك تتابع وتنظم، لكنه مش بديل عن الدكتور. أي تغيير في الأدوية أو الأكل مع مرض مزمن لازم يكون بموافقة دكتورك.", en: "Vitalyn helps you track and plan — it doesn’t replace your doctor. Check medication or diet changes with them.", size: 12, weight: 400, color: VColor.inkSecondary)

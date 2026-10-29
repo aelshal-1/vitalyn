@@ -25,6 +25,8 @@ final class UserProfile {
     var createdAt: Date = Date()
     /// JSON array of HealthItemInsight: what Claude understood from conditions, medications and allergies.
     var healthInsightsData: Data = Data()
+    /// BMR entered by the user (kcal/day); 0 means calculate it (InBody, then formulas).
+    var manualBMR: Double = 0
 
     init() {}
 

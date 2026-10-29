@@ -54,8 +54,21 @@ enum AppData {
             ageYears: profile.ageYears,
             sex: profile.sex,
             bodyFatPercent: latest?.effectiveBodyFatPercent,
-            measuredBMR: latest?.bmrKcal
+            measuredBMR: profile.manualBMR > 0 ? profile.manualBMR : latest?.bmrKcal
         )
+    }
+
+    /// The BMR the app would use without a manual value, and where it comes from.
+    static func calculatedBMR(profile: UserProfile, scans: [InBodyScan], health: HealthService) -> (kcal: Int, sourceAr: String, sourceEn: String) {
+        var body = bodyMetrics(profile: profile, scans: scans, health: health)
+        if let scanBMR = scans.last?.bmrKcal {
+            return (Int(scanBMR.rounded()), "من آخر InBody", "from your last InBody")
+        }
+        body.measuredBMR = nil
+        let value = Int(NutritionCalculator.bmr(for: body).rounded())
+        return body.leanMassKg != nil
+            ? (value, "محسوب من كتلة جسمك الصافية", "calculated from lean mass")
+            : (value, "محسوب من الطول والوزن والسن", "calculated from height, weight and age")
     }
 
     static func targets(profile: UserProfile, scans: [InBodyScan], health: HealthService) -> MacroTargets {

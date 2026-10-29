@@ -6,7 +6,7 @@ name: Vitalyn
 options:
   bundleIdPrefix: com.elshal
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "17.0"
   developmentLanguage: ar
   createIntermediateGroups: true
 

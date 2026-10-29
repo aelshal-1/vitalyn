@@ -14,7 +14,7 @@ settings:
   base:
     # App targets use the Swift 5 language mode (Swift 6 compiler); VitalynCore uses Swift 6 strict concurrency.
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -44,6 +44,8 @@ targets:
       path: Vitalyn/Info.plist
       properties:
         CFBundleDisplayName: Vitalyn
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
@@ -88,6 +90,8 @@ targets:
       path: VitalynWidgets/Info.plist
       properties:
         CFBundleDisplayName: Vitalyn
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

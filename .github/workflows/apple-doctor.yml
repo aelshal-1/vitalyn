@@ -1,0 +1,35 @@
+name: Apple doctor
+
+# Manual check of the App Store Connect API key and signing assets. Prints no secret values.
+on:
+  workflow_dispatch:
+
+jobs:
+  doctor:
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Check secret formats
+        run: |
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "Team ID length: ${#APPLE_TEAM_ID} (expected 10)"
+          echo "Key ID length: ${#ASC_KEY_ID} (expected 10)"
+          echo "Issuer ID length: ${#ASC_ISSUER_ID} (expected 36)"
+          echo "Key file first line: $(head -1 "$RUNNER_TEMP/AuthKey.p8")"
+          echo "Key file last line: $(tail -1 "$RUNNER_TEMP/AuthKey.p8")"
+          echo "Key file lines: $(wc -l < "$RUNNER_TEMP/AuthKey.p8")"
+          openssl pkey -in "$RUNNER_TEMP/AuthKey.p8" -noout && echo "Key file parses as a private key"
+      - name: Ask Apple
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: bundle exec fastlane doctor

@@ -36,4 +36,27 @@ platform :ios do
       skip_waiting_for_build_processing: true
     )
   end
+
+  desc "Check the App Store Connect API key and what the account has (no secrets printed)"
+  lane :doctor do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH")
+    )
+    begin
+      apps = Spaceship::ConnectAPI::App.all
+      UI.success("API key works. Apps: #{apps.map(&:bundle_id).join(', ')}")
+    rescue => e
+      UI.user_error!("API key rejected by Apple: #{e.message}")
+    end
+    bundle_ids = Spaceship::ConnectAPI::BundleId.all.map(&:identifier)
+    UI.message("Bundle IDs: #{bundle_ids.join(', ')}")
+    certs = Spaceship::ConnectAPI::Certificate.all
+    UI.message("Certificates: #{certs.map(&:certificate_type).tally}")
+    devices = Spaceship::ConnectAPI::Device.all
+    UI.message("Registered devices: #{devices.count}")
+    profiles = Spaceship::ConnectAPI::Profile.all
+    UI.message("Profiles: #{profiles.map { |p| "#{p.name} (#{p.profile_type})" }.join(', ')}")
+  end
 end

@@ -364,6 +364,29 @@ public enum AITasks {
         return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: healthItemsSchema, effort: .medium, maxTokens: 6000)
     }
 
+    // MARK: Motivation
+
+    public static let motivationSchema = JSONSchema.object([
+        ("messages", JSONSchema.array(JSONSchema.object([
+            ("titleAr", JSONSchema.string("Short punchy title with one emoji, Egyptian Arabic, under 40 characters")),
+            ("titleEn", JSONSchema.string("Same title in English")),
+            ("bodyAr", JSONSchema.string("One or two warm sentences, Egyptian Arabic, under 110 characters")),
+            ("bodyEn", JSONSchema.string("Same in English"))
+        ]), description: "Exactly 7 messages, one per day"))
+    ])
+
+    /// A week of personal motivational notifications based on the user's real progress.
+    public static func motivationWeek(context: UserContext, streakDays: Int, lostKg: Double) -> AIRequest {
+        let system = persona + "\nYou write short, warm, specific motivational push notifications.\n\n" + context.promptText()
+        let instruction = """
+        Write 7 daily notifications for the coming week. Use the user's real progress (current streak \(streakDays) days, \
+        \(String(format: "%.1f", lostKg)) kg lost so far, goal and targets above). Mix: celebrating progress, a concrete tip for \
+        the day (water, protein, steps, sleep, an Egyptian food swap), and encouragement after hard days. Respect their \
+        conditions. No guilt, no medical advice, no repeated messages.
+        """
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: motivationSchema, effort: .low, maxTokens: 4000)
+    }
+
     /// Every schema the app sends, for validation in tests.
     public static var allSchemas: [String: JSONValue] {
         [
@@ -375,7 +398,8 @@ public enum AITasks {
             "weekPlan": weekPlanSchema,
             "plannedMeal": plannedMealSchema,
             "workouts": workoutsSchema,
-            "healthItems": healthItemsSchema
+            "healthItems": healthItemsSchema,
+            "motivation": motivationSchema
         ]
     }
 }

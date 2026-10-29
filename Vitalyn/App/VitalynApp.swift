@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 import VitalynCore
 
 @main
@@ -8,6 +9,10 @@ struct VitalynApp: App {
     @State private var health = HealthService()
     @State private var ai = AIService()
     private let container = VitalynApp.makeContainer()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -32,6 +37,7 @@ struct VitalynApp: App {
     private func refresh() async {
         await health.refresh()
         AppData.publishSnapshot(container.mainContext, health: health)
+        await NotificationService.refreshMotivation(context: container.mainContext, health: health, ai: ai)
     }
 
     /// On-device store. Models are CloudKit-compatible so iPhone/iPad sync can be switched on later.

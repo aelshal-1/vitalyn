@@ -58,6 +58,26 @@ struct ConnectionsSection: View {
     @State private var keyDraft = ""
     @State private var editingKey = false
     @AppStorage("notifications-on") private var notificationsOn = true
+    @AppStorage(NotificationService.motivationOnKey) private var motivationOn = true
+    @AppStorage(NotificationService.motivationHourKey) private var motivationHour = 13
+    @AppStorage(NotificationService.motivationMinuteKey) private var motivationMinute = 0
+    @Environment(\.modelContext) private var context
+
+    private var motivationTime: Binding<Date> {
+        Binding(
+            get: { Calendar.current.date(bySettingHour: motivationHour, minute: motivationMinute, second: 0, of: Date()) ?? Date() },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                motivationHour = parts.hour ?? 13
+                motivationMinute = parts.minute ?? 0
+                rescheduleMotivation()
+            }
+        )
+    }
+
+    private func rescheduleMotivation() {
+        Task { await NotificationService.refreshMotivation(context: context, health: health, ai: ai) }
+    }
 
     var body: some View {
         @Bindable var ai = ai
@@ -136,6 +156,18 @@ struct ConnectionsSection: View {
                 .tint(VColor.primary)
                 .onChange(of: notificationsOn) { _, on in
                     if on { NotificationService.scheduleDefaults() } else { NotificationService.cancelAll() }
+                }
+
+                Toggle(isOn: $motivationOn) {
+                    BiText(ar: "رسايل تحفيزية كل يوم", en: "Daily motivational messages", size: 14, weight: 500)
+                }
+                .tint(VColor.primary)
+                .onChange(of: motivationOn) { _, _ in rescheduleMotivation() }
+                if motivationOn {
+                    DatePicker(selection: motivationTime, displayedComponents: .hourAndMinute) {
+                        BiCaption(ar: "الميعاد", en: "Time")
+                    }
+                    BiText(ar: "رسالة كل يوم من مدربك عن تقدمك الحقيقي، وتنبيه لما تحقق إنجاز جديد.", en: "A daily note from your coach about your real progress, plus an alert when you earn an achievement.", size: 11, weight: 400, color: VColor.muted)
                 }
             }
         }

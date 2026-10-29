@@ -289,3 +289,31 @@ import Testing
         #expect(HealthItemInsight.key(.condition, " WPW ") == HealthItemInsight.key(.condition, "wpw"))
     }
 }
+
+@Suite struct MotivationTests {
+    let input = MotivationInput(name: "Ahmed Elshal", streakDays: 5, lostKg: 4.2, remainingKg: 14.4, proteinTarget: 150, stepsGoal: 8000)
+
+    @Test func progressMessagesComeFirst() {
+        let messages = Motivation.messages(for: input, count: 7, seed: 0)
+        #expect(messages.count == 7)
+        #expect(messages[0].titleEn == "4.2 kg down 💪")
+        #expect(messages[0].bodyEn.hasPrefix("Ahmed, "))
+        #expect(messages[1].titleEn == "5-day streak 🔥")
+        #expect(messages[2].titleEn.contains("14.4 kg"))
+    }
+
+    @Test func noProgressMeansGeneralOnly() {
+        let fresh = MotivationInput(name: "", streakDays: 0, lostKg: 0, remainingKg: 0, proteinTarget: 120, stepsGoal: 7000)
+        let messages = Motivation.messages(for: fresh, count: 3, seed: 1)
+        #expect(messages.count == 3)
+        #expect(messages[0].titleEn == "Protein first 🍗")
+        #expect(messages[0].bodyEn.contains("120 g"))
+    }
+
+    @Test func seedRotatesAndNegativeSeedIsSafe() {
+        let a = Motivation.messages(for: input, count: 7, seed: 2)
+        let b = Motivation.messages(for: input, count: 7, seed: 3)
+        #expect(a != b)
+        #expect(Motivation.messages(for: input, count: 4, seed: -5).count == 4)
+    }
+}

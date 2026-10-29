@@ -145,5 +145,6 @@ enum AppData {
         )
         SnapshotStore.save(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
+        NotificationService.announceNewBadges(context: context, health: health)
     }
 }

@@ -10,7 +10,7 @@ struct CoachView: View {
 
     @State private var speech = SpeechService()
     @State private var draft = ""
-    @State private var voiceMode = false
+    @State private var speaking = false
     @State private var sending = false
     @State private var error: String?
     @State private var mealToLog: MealInput?
@@ -26,12 +26,8 @@ struct CoachView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
-                if voiceMode {
-                    voicePanel
-                } else {
-                    chat
-                    inputBar
-                }
+                chat
+                inputBar
             }
             .background(VColor.ground)
             .toolbar(.hidden, for: .navigationBar)
@@ -51,28 +47,22 @@ struct CoachView: View {
                 .background(VColor.night, in: Circle())
             BiText(ar: "مدرب Vitalyn", en: "Vitalyn Coach", size: 17)
             Spacer()
-            HStack(spacing: 0) {
-                modeButton(ar: "كتابة", en: "Text", selected: !voiceMode) { voiceMode = false; speech.stop() }
-                modeButton(ar: "صوت", en: "Voice", selected: voiceMode) { voiceMode = true }
+            if speaking {
+                Button {
+                    speech.stopSpeaking()
+                    speaking = false
+                } label: {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(VColor.ink)
+                        .frame(width: 44, height: 44)
+                        .background(VColor.surface, in: Circle())
+                }
+                .accessibilityLabel("وقّف الصوت — Stop speaking")
             }
-            .padding(3)
-            .background(Color(hex: 0xE6EBE6), in: RoundedRectangle(cornerRadius: 14))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-    }
-
-    private func modeButton(ar: String, en: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 0) {
-                Text(ar).font(VFont.readex(12))
-                Text(en).font(VFont.readex(9))
-            }
-            .foregroundStyle(VColor.ink)
-            .frame(width: 58, height: 40)
-            .background(selected ? VColor.surface : .clear, in: RoundedRectangle(cornerRadius: 11))
-        }
-        .buttonStyle(.plain)
     }
 
     private var chat: some View {
@@ -130,15 +120,38 @@ struct CoachView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            if speech.isRecording {
+                Label {
+                    Text("بسمعك… دوس المايك تاني عشان تبعت · Listening… tap the mic again to send")
+                        .font(VFont.readex(11))
+                } icon: {
+                    Image(systemName: "waveform").symbolEffect(.variableColor.iterative)
+                }
+                .foregroundStyle(VColor.energy)
+                .padding(.horizontal, 16)
+            }
+            if let message = speech.errorMessage {
+                Text(message).font(VFont.readex(11)).foregroundStyle(VColor.energy).padding(.horizontal, 16)
+            }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("اكتب للمدرب · Message coach", text: $draft, axis: .vertical)
+                TextField(speech.isRecording ? "بسمعك… · Listening…" : "اكتب أو اتكلم · Type or talk", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .font(VFont.readex(15))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(VColor.surface, in: RoundedRectangle(cornerRadius: 22))
                     .overlay(RoundedRectangle(cornerRadius: 22).stroke(VColor.line))
-                DictationButton(speech: speech, text: $draft)
+                Button(action: micTapped) {
+                    Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(speech.isRecording ? VColor.energy : VColor.primary, in: Circle())
+                }
+                .accessibilityLabel(speech.isRecording ? "وقّف وابعت — Stop and send" : "اتكلم — Talk")
+                .onChange(of: speech.transcript) { _, value in
+                    if speech.isRecording, !value.isEmpty { draft = value }
+                }
                 Button { send(draft) } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 18, weight: .bold))
@@ -154,54 +167,21 @@ struct CoachView: View {
         }
     }
 
-    private var voicePanel: some View {
-        VStack(spacing: 22) {
-            Spacer()
-            Text(speech.isRecording ? "بسمعك… · Listening…" : (sending ? "بفكر… · Thinking…" : "دوس واتكلم · Tap and talk"))
-                .font(VFont.readex(14))
-                .foregroundStyle(VColor.nightMuted)
-            Text(speech.transcript.isEmpty ? (messages.last.map { $0.isUser ? "" : $0.textAr } ?? "") : speech.transcript)
-                .font(VFont.readex(20))
-                .foregroundStyle(VColor.nightText)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-            if let last = messages.last, !last.isUser, speech.transcript.isEmpty {
-                Text(last.textEn)
-                    .font(VFont.readex(14))
-                    .foregroundStyle(VColor.nightMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-            Spacer()
-            Button {
-                if speech.isRecording {
-                    let text = speech.transcript
-                    speech.stop()
-                    send(text, speakReply: true)
-                } else {
-                    speech.stopSpeaking()
-                    Task { await speech.start() }
-                }
-            } label: {
-                Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(VColor.night)
-                    .frame(width: 92, height: 92)
-                    .background(VColor.mint, in: Circle())
-            }
-            .accessibilityLabel(speech.isRecording ? "ابعت — Send" : "اتكلم — Talk")
-            if let message = speech.errorMessage {
-                Text(message).font(VFont.readex(12)).foregroundStyle(Color(hex: 0xFFB4A0)).padding(.horizontal, 24)
-            }
-            BiText(ar: "الرد بيتقري بصوت عالي", en: "Replies are read aloud", size: 12, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
-                .padding(.bottom, 24)
-        }
-        .frame(maxWidth: .infinity)
-        .background(VColor.night, in: RoundedRectangle(cornerRadius: 32))
-        .padding(12)
-    }
-
     // MARK: Sending
+
+    /// First tap starts dictation into the box; second tap stops and sends, and the reply is read aloud.
+    private func micTapped() {
+        if speech.isRecording {
+            let text = speech.transcript.isEmpty ? draft : speech.transcript
+            speech.stop()
+            send(text, speakReply: true)
+        } else {
+            speech.stopSpeaking()
+            speaking = false
+            draft = ""
+            Task { await speech.start() }
+        }
+    }
 
     private func send(_ text: String, speakReply: Bool = false) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -237,7 +217,10 @@ struct CoachView: View {
                 for action in reply.actions where action.type == .logWorkout || action.type == .logWater {
                     perform(action)
                 }
-                if speakReply { speech.speak(reply.replyAr) }
+                if speakReply {
+                    speech.speak(reply.replyAr)
+                    speaking = true
+                }
             } catch {
                 self.error = error.localizedDescription
             }

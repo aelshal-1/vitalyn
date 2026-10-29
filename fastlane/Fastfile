@@ -6,20 +6,60 @@ def clean_env(name)
 end
 
 platform :ios do
-  desc "Build, sign (cloud-managed, automatic) and upload to TestFlight"
+  desc "Build, sign with an App Store distribution certificate and upload to TestFlight"
   lane :beta do
     api_key = app_store_connect_api_key(
       key_id: clean_env("ASC_KEY_ID"),
       issuer_id: clean_env("ASC_ISSUER_ID"),
       key_filepath: ENV.fetch("ASC_KEY_PATH")
     )
+    team_id = clean_env("APPLE_TEAM_ID")
+    targets = {
+      "Vitalyn" => "com.elshal.vitalyn",
+      "VitalynWidgets" => "com.elshal.vitalyn.widgets"
+    }
 
-    auth = [
-      "-allowProvisioningUpdates",
-      "-authenticationKeyPath #{ENV.fetch('ASC_KEY_PATH')}",
-      "-authenticationKeyID #{clean_env('ASC_KEY_ID')}",
-      "-authenticationKeyIssuerID #{clean_env('ASC_ISSUER_ID')}"
-    ].join(" ")
+    # Temporary keychain on the CI runner for this run's certificate.
+    setup_ci(force: true)
+
+    # The runner starts empty every time, so each run creates a new distribution certificate.
+    # Apple caps how many can exist, so revoke the ones earlier runs left behind (approved by
+    # the account owner). Builds already on TestFlight are re-signed by Apple and keep working.
+    Spaceship::ConnectAPI::Certificate.all.each do |certificate|
+      next unless %w[DISTRIBUTION IOS_DISTRIBUTION].include?(certificate.certificate_type)
+      UI.message("Revoking old distribution certificate #{certificate.id}")
+      certificate.delete!
+    end
+
+    get_certificates(
+      api_key: api_key,
+      development: false,
+      generate_apple_certs: true,
+      keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"),
+      keychain_password: "",
+      output_path: "build/certs"
+    )
+
+    profiles = {}
+    targets.each do |target, bundle_id|
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: bundle_id,
+        team_id: team_id,
+        force: true,
+        output_path: "build/profiles"
+      )
+      profiles[bundle_id] = lane_context[SharedValues::SIGH_NAME]
+      update_code_signing_settings(
+        path: "Vitalyn.xcodeproj",
+        use_automatic_signing: false,
+        team_id: team_id,
+        targets: [target],
+        bundle_identifier: bundle_id,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profiles[bundle_id]
+      )
+    end
 
     build_app(
       project: "Vitalyn.xcodeproj",
@@ -27,11 +67,11 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       export_options: {
-        signingStyle: "automatic",
-        teamID: clean_env("APPLE_TEAM_ID")
+        signingStyle: "manual",
+        teamID: team_id,
+        provisioningProfiles: profiles
       },
-      xcargs: "#{auth} DEVELOPMENT_TEAM=#{clean_env('APPLE_TEAM_ID')} CURRENT_PROJECT_VERSION=#{ENV.fetch('BUILD_NUMBER', '1')}",
-      export_xcargs: auth,
+      xcargs: "CURRENT_PROJECT_VERSION=#{ENV.fetch('BUILD_NUMBER', '1')}",
       output_directory: "build",
       clean: true
     )

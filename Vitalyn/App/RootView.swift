@@ -66,10 +66,13 @@ struct RootView: View {
                 screen(for: tab)
             }
         } else {
-            screen(for: tab)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    BilingualTabBar(selection: $tab)
-                }
+            // Stacked (not an overlay inset) so scroll views end above the bar and nothing hides under it.
+            VStack(spacing: 0) {
+                screen(for: tab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                BilingualTabBar(selection: $tab)
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
     }
 

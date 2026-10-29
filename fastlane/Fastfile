@@ -119,6 +119,11 @@ platform :ios do
       app.get_beta_groups.each do |group|
         testers = Spaceship::ConnectAPI::BetaTester.all(filter: { betaGroups: group.id }) rescue []
         UI.message("Beta group '#{group.name}' internal=#{group.is_internal_group} testers=#{testers.count}")
+        testers.each do |tester|
+          email = tester.email.to_s
+          masked = email.sub(/\A(.).*(@.*)\z/, '\\1***\\2')
+          UI.message("  tester #{masked} invite=#{tester.invite_type} state=#{tester.respond_to?(:state) ? tester.state : 'n/a'}")
+        end
       end
     rescue => e
       UI.important("Could not list beta groups: #{e.message}")

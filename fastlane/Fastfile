@@ -103,5 +103,25 @@ platform :ios do
     UI.message("Registered devices: #{devices.count}")
     profiles = Spaceship::ConnectAPI::Profile.all
     UI.message("Profiles: #{profiles.map { |p| "#{p.name} (#{p.profile_type})" }.join(', ')}")
+
+    app = Spaceship::ConnectAPI::App.find("com.elshal.vitalyn")
+    begin
+      builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 10, includes: "buildBetaDetail,preReleaseVersion")
+      UI.message("Builds: #{builds.count}")
+      builds.each do |build|
+        detail = build.build_beta_detail
+        UI.message("  #{build.app_version} (#{build.version}) uploaded #{build.uploaded_date} processing=#{build.processing_state} expired=#{build.expired} internal=#{detail&.internal_build_state} external=#{detail&.external_build_state}")
+      end
+    rescue => e
+      UI.important("Could not list builds: #{e.message}")
+    end
+    begin
+      app.get_beta_groups.each do |group|
+        testers = Spaceship::ConnectAPI::BetaTester.all(filter: { betaGroups: group.id }) rescue []
+        UI.message("Beta group '#{group.name}' internal=#{group.is_internal_group} testers=#{testers.count}")
+      end
+    rescue => e
+      UI.important("Could not list beta groups: #{e.message}")
+    end
   end
 end

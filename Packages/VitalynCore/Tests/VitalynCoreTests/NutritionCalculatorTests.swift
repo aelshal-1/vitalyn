@@ -118,3 +118,31 @@ import Testing
         #expect(ideal.goalKg == 68)
     }
 }
+
+@Suite struct PaceTests {
+    @Test func optionsScaleWithWeight() {
+        let options = NutritionCalculator.paceOptions(weightKg: 96.4, heightCm: 178, ageYears: 34)
+        #expect(options.map(\.percent) == [0.25, 0.5, 0.75, 1.0, 1.25])
+        // 0.75% of 96.4 = 0.723 → 0.70 kg/week; 1% = 0.964 → 0.95
+        #expect(options[2].kgPerWeek == 0.7)
+        #expect(options[3].kgPerWeek == 0.95)
+    }
+
+    @Test func recommendationFollowsBMIAndAge() {
+        // BMI 30.4 → 0.75%
+        #expect(NutritionCalculator.recommendedPacePercent(weightKg: 96.4, heightCm: 178, ageYears: 34) == 0.75)
+        // BMI 37.9 → 1%
+        #expect(NutritionCalculator.recommendedPacePercent(weightKg: 120, heightCm: 178, ageYears: 34) == 1.0)
+        // BMI 23.7 → 0.5%
+        #expect(NutritionCalculator.recommendedPacePercent(weightKg: 75, heightCm: 178, ageYears: 34) == 0.5)
+        // 60+ capped at 0.5%
+        #expect(NutritionCalculator.recommendedPacePercent(weightKg: 120, heightCm: 178, ageYears: 62) == 0.5)
+        let options = NutritionCalculator.paceOptions(weightKg: 96.4, heightCm: 178, ageYears: 34)
+        #expect(options.filter(\.recommended).map(\.percent) == [0.75])
+    }
+
+    @Test func weeksToGoal() {
+        #expect(NutritionCalculator.weeksToGoal(currentKg: 96.4, goalKg: 79, kgPerWeek: 0.7) == 25)
+        #expect(NutritionCalculator.weeksToGoal(currentKg: 79, goalKg: 79, kgPerWeek: 0.7) == nil)
+    }
+}

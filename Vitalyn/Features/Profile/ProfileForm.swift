@@ -54,7 +54,6 @@ struct GoalSection: View {
     @Bindable var profile: UserProfile
     var currentWeightKg: Double? = nil
     var bodyFatPercent: Double? = nil
-    private let paces: [Double] = [0.25, 0.5, 0.75, 1.0]
 
     private var ideal: IdealWeight? {
         let weight = currentWeightKg ?? profile.startWeightKg
@@ -95,16 +94,7 @@ struct GoalSection: View {
                     .background(VColor.primarySoft, in: RoundedRectangle(cornerRadius: 16))
                 }
                 NumberField(ar: "الوزن المستهدف", en: "Goal weight", value: $profile.goalWeightKg, unit: "kg")
-                VStack(alignment: .leading, spacing: 8) {
-                    BiCaption(ar: "معدل النزول في الأسبوع", en: "Weekly pace")
-                    HStack(spacing: 8) {
-                        ForEach(paces, id: \.self) { pace in
-                            BiChip(ar: "\(VFormat.decimal(pace, digits: 2)) كجم", en: "\(VFormat.decimal(pace, digits: 2)) kg", selected: profile.weeklyLossKg == pace) {
-                                profile.weeklyLossKg = pace
-                            }
-                        }
-                    }
-                }
+                PacePicker(profile: profile, currentWeightKg: currentWeightKg ?? profile.startWeightKg)
                 VStack(alignment: .leading, spacing: 8) {
                     BiCaption(ar: "نشاطك اليومي (من غير التمرين)", en: "Daily activity (outside workouts)")
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -278,5 +268,70 @@ struct FlowLayout: Layout {
     private func layoutDirectionIsRTL(_ subviews: Subviews) -> Bool {
         // Custom layouts are mirrored automatically for RTL; place left-to-right.
         false
+    }
+}
+
+/// Weekly pace as a share of body weight (0.5–1% per week is the evidence-based range), with time to goal.
+struct PacePicker: View {
+    @Bindable var profile: UserProfile
+    let currentWeightKg: Double
+
+    var body: some View {
+        let options = NutritionCalculator.paceOptions(weightKg: currentWeightKg, heightCm: profile.heightCm, ageYears: profile.ageYears)
+        VStack(alignment: .leading, spacing: 8) {
+            BiCaption(ar: "معدل النزول في الأسبوع", en: "Weekly pace")
+            BiText(
+                ar: "العلم بيقول إن نزول 0.5–1% من وزنك في الأسبوع بيحافظ على العضلات وبيستمر. اخترنالك الأنسب لوزنك وسنك.",
+                en: "Research shows losing 0.5–1% of body weight per week protects muscle and lasts. We picked the best fit for your weight and age.",
+                size: 12, weight: 400, color: VColor.inkSecondary
+            )
+            ForEach(options) { option in
+                let selected = abs(profile.weeklyLossKg - option.kgPerWeek) < 0.001
+                Button {
+                    profile.weeklyLossKg = option.kgPerWeek
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                            .font(.system(size: 20))
+                            .foregroundStyle(selected ? VColor.primary : VColor.line)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text("\(option.ar) · \(option.en)").font(VFont.readex(14, weight: 600))
+                                if option.recommended {
+                                    Text("موصى بيه · Recommended")
+                                        .font(VFont.readex(10, weight: 600))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8).padding(.vertical, 3)
+                                        .background(VColor.primary, in: Capsule())
+                                }
+                            }
+                            Text("\(option.noteAr) · \(option.noteEn)").font(VFont.readex(11)).foregroundStyle(VColor.inkSecondary)
+                            if let weeks = NutritionCalculator.weeksToGoal(currentKg: currentWeightKg, goalKg: profile.goalWeightKg, kgPerWeek: option.kgPerWeek) {
+                                Text(timeText(weeks: weeks)).font(VFont.readex(11)).foregroundStyle(VColor.muted)
+                            }
+                        }
+                        Spacer(minLength: 4)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("\(VFormat.decimal(option.kgPerWeek, digits: 2)) kg").font(VFont.readex(15, weight: 700))
+                            Text("\(VFormat.decimal(option.percent, digits: 2))% / week").font(VFont.readex(10)).foregroundStyle(VColor.muted)
+                        }
+                        .environment(\.layoutDirection, .leftToRight)
+                    }
+                    .foregroundStyle(VColor.ink)
+                    .padding(12)
+                    .background(selected ? VColor.primarySoft : VColor.ground, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(selected ? VColor.primary : .clear, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+    }
+
+    private func timeText(weeks: Int) -> String {
+        let date = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: Date()) ?? Date()
+        let ar = date.formatted(.dateTime.month(.wide).year().locale(Locale(identifier: "ar")))
+        let en = date.formatted(.dateTime.month(.abbreviated).year().locale(Locale(identifier: "en")))
+        return "توصل للهدف في حوالي \(weeks) أسبوع (\(ar)) · Goal in about \(weeks) weeks (\(en))"
     }
 }

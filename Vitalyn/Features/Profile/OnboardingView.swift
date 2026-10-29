@@ -34,6 +34,9 @@ struct OnboardingView: View {
                             .onAppear {
                                 if profile.goalWeightKg == 0 {
                                     profile.goalWeightKg = NutritionCalculator.idealWeight(heightCm: profile.heightCm, ageYears: profile.ageYears, sex: profile.sex, currentWeightKg: profile.startWeightKg).goalKg
+                                    if let recommended = NutritionCalculator.paceOptions(weightKg: profile.startWeightKg, heightCm: profile.heightCm, ageYears: profile.ageYears).first(where: \.recommended) {
+                                        profile.weeklyLossKg = recommended.kgPerWeek
+                                    }
                                 }
                             }
                     case 2:

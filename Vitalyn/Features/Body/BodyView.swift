@@ -262,7 +262,7 @@ struct AvatarCaptureView: View {
             .background(Color(hex: 0x0B1512))
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("إلغاء · Cancel") { dismiss() }.foregroundStyle(VColor.nightText) } }
             .sheet(isPresented: $showCamera) {
-                CameraPicker { image in save(image) }.ignoresSafeArea()
+                CameraPicker(device: .front) { image in save(image) }.ignoresSafeArea()
             }
         }
     }

@@ -163,6 +163,8 @@ struct NumberField: View {
 // MARK: - Camera and photo library
 
 struct CameraPicker: UIViewControllerRepresentable {
+    /// Which camera opens first; the user can still flip it in the camera screen.
+    var device: UIImagePickerController.CameraDevice = .rear
     let onImage: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -171,6 +173,9 @@ struct CameraPicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = Self.isAvailable ? .camera : .photoLibrary
+        if Self.isAvailable, UIImagePickerController.isCameraDeviceAvailable(device) {
+            picker.cameraDevice = device
+        }
         picker.delegate = context.coordinator
         return picker
     }

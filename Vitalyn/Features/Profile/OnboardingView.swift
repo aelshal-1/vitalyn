@@ -86,6 +86,7 @@ struct OnboardingView: View {
                 profile.heightCm = 0
                 profile.startWeightKg = 0
                 profile.goalWeightKg = 0
+                profile.birthYear = 0
             }
             let hints = health.profileHints()
             if let sex = hints.sex { profile.sex = sex }
@@ -99,6 +100,7 @@ struct OnboardingView: View {
         switch step {
         case 0:
             if profile.name.trimmingCharacters(in: .whitespaces).isEmpty { items.append(("اكتب اسمك", "Enter your name")) }
+            if !(1930...2012).contains(profile.birthYear) { items.append(("اختار سنة ميلادك", "Choose your birth year")) }
             if !(120...230).contains(profile.heightCm) { items.append(("اكتب طولك (120–230 سم)", "Enter your height (120–230 cm)")) }
             if !(30...300).contains(profile.startWeightKg) { items.append(("اكتب وزنك (30–300 كجم)", "Enter your weight (30–300 kg)")) }
         case 1:

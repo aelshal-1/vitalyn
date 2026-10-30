@@ -249,17 +249,38 @@ final class WorkoutEntry {
     }
 }
 
+enum PlanStatus: String {
+    /// Claude is still writing it (possibly in the background).
+    case building
+    case ready
+    case failed
+}
+
 @Model
 final class MealPlanRecord {
+    var uid: String = UUID().uuidString
     var createdAt: Date = Date()
     var startDate: Date = Date()
     var presetRaw: String = PlanPreset.egyptianHome.rawValue
     var mealsPerDayRaw: String = MealsPerDay.threeMealsTwoSnacks.rawValue
+    /// The user's extra request, kept so a failed plan can be tried again.
+    var requestText: String = ""
+    var statusRaw: String = PlanStatus.ready.rawValue
+    var errorMessage: String = ""
     var planData: Data = Data()
     /// Grocery-list lines (GroceryLine.id) already bought.
     var checkedGroceries: [String] = []
 
     init() {}
+
+    var status: PlanStatus {
+        get { PlanStatus(rawValue: statusRaw) ?? .ready }
+        set { statusRaw = newValue.rawValue }
+    }
+
+    var preset: PlanPreset { PlanPreset(rawValue: presetRaw) ?? .egyptianHome }
+    var mealsPerDay: MealsPerDay { MealsPerDay(rawValue: mealsPerDayRaw) ?? .threeMealsTwoSnacks }
+    var mealCount: Int { 7 * mealsPerDay.slots(for: preset).count }
 
     /// The plan day for `date`, or nil when the date is outside the plan's week.
     func dayIndex(for date: Date) -> Int? {
@@ -316,6 +337,20 @@ final class AvatarAsset {
     @Attribute(.externalStorage) var file: Data?
 
     init() {}
+}
+
+/// The app's one SwiftData store, shared with work that finishes while the app is in the background.
+@MainActor
+enum AppStore {
+    /// On-device store. Models are CloudKit-compatible so iPhone/iPad sync can be switched on later.
+    static let container: ModelContainer = {
+        let schema = SwiftData.Schema(VitalynSchema.models)
+        do {
+            return try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, cloudKitDatabase: .none))
+        } catch {
+            fatalError("Could not open the Vitalyn store: \(error)")
+        }
+    }()
 }
 
 enum VitalynSchema {

@@ -5,10 +5,11 @@ import VitalynCore
 
 @main
 struct VitalynApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @State private var health = HealthService()
     @State private var ai = AIService()
-    private let container = VitalynApp.makeContainer()
+    private let container = AppStore.container
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
@@ -35,18 +36,10 @@ struct VitalynApp: App {
 
     @MainActor
     private func refresh() async {
+        BackgroundAI.shared.health = health
+        await BackgroundAI.shared.restore()
         await health.refresh()
         AppData.publishSnapshot(container.mainContext, health: health)
         await NotificationService.refreshMotivation(context: container.mainContext, health: health, ai: ai)
-    }
-
-    /// On-device store. Models are CloudKit-compatible so iPhone/iPad sync can be switched on later.
-    static func makeContainer() -> ModelContainer {
-        let schema = SwiftData.Schema(VitalynSchema.models)
-        do {
-            return try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, cloudKitDatabase: .none))
-        } catch {
-            fatalError("Could not open the Vitalyn store: \(error)")
-        }
     }
 }

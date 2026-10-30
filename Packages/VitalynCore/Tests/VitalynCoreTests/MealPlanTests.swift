@@ -44,35 +44,34 @@ import Testing
         #expect(GroceryList.build(plan).map(\.quantity) == ["1 kg"])
     }
 
-    @Test func menuAssemblesInDayOrder() {
-        let menu = WeekMenu(
-            days: [MenuDay(dayIndex: 1, meals: []), MenuDay(dayIndex: 0, meals: [])],
-            ingredients: [], prepAr: "اطبخ", prepEn: "Cook", notesAr: "", notesEn: ""
-        )
-        let plan = menu.assemble([0: [meal(.breakfast, [])]])
-        #expect(plan.days.map(\.dayIndex) == [0, 1])
-        #expect(plan.days[0].meals.count == 1)
-        #expect(plan.prepEn == "Cook")
-    }
-
     @Test func slotsFollowTheChoice() {
         #expect(MealsPerDay.threeMealsTwoSnacks.slots(for: .egyptianHome) == [.breakfast, .snack, .lunch, .snack, .dinner])
         #expect(MealsPerDay.threeMeals.slots(for: .ramadan) == [.dinner, .snack, .breakfast])
     }
 
-    @Test func dayRequestUsesSharedIngredientNames() throws {
+    @Test func weekRequestNamesDaysAndSlots() throws {
         let context = UserContext(ageYears: 36, sex: .male, heightCm: 166, weightKg: 91, goalWeightKg: 75, weeklyLossKg: 0.5, activity: .light, targets: MacroTargets(calories: 1800, proteinGrams: 140, carbsGrams: 170, fatGrams: 60))
-        let menu = WeekMenu(
-            days: [MenuDay(dayIndex: 2, meals: [MenuMeal(slot: .lunch, nameAr: "فراخ مشوية", nameEn: "Grilled chicken")])],
-            ingredients: [MenuIngredient(nameAr: "صدور فراخ", nameEn: "Chicken breast", category: .protein)],
-            prepAr: "", prepEn: "", notesAr: "", notesEn: ""
-        )
-        let request = AITasks.planDay(context: context, menu: menu, dayIndex: 2, start: Date(), request: "")
+        let start = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 10, day: 31)))
+        let request = AITasks.weekPlan(context: context, preset: .egyptianHome, mealsPerDay: .threeMealsTwoSnacks, start: start, request: "fish on Friday")
         guard case let .text(text)? = request.messages.first?.content.first else {
             Issue.record("Expected a text message")
             return
         }
-        #expect(text.contains("lunch: Grilled chicken"))
-        #expect(text.contains("Chicken breast / صدور فراخ (protein)"))
+        #expect(text.contains("Day 0: Saturday"))
+        #expect(text.contains("breakfast, snack, lunch, snack, dinner"))
+        #expect(text.contains("fish on Friday"))
+        #expect(request.maxTokens == 64000)
+    }
+
+    @Test func swapOffersThePlansIngredients() throws {
+        let context = UserContext(ageYears: 36, sex: .male, heightCm: 166, weightKg: 91, goalWeightKg: 75, weeklyLossKg: 0.5, activity: .light, targets: MacroTargets(calories: 1800, proteinGrams: 140, carbsGrams: 170, fatGrams: 60))
+        let plan = WeekPlan(days: [PlanDay(dayIndex: 0, meals: [meal(.lunch, [ingredient("Chicken breast", 200, .g, .protein)]), meal(.dinner, [ingredient("chicken breast", 100, .g, .protein)])])], groceries: [], notesAr: "", notesEn: "", prepAr: "", prepEn: "")
+        #expect(plan.ingredientNames.count == 1)
+        let request = AITasks.swapMeal(context: context, meal: plan.days[0].meals[0], ingredients: plan.ingredientNames, request: "")
+        guard case let .text(text)? = request.messages.first?.content.first else {
+            Issue.record("Expected a text message")
+            return
+        }
+        #expect(text.contains("- Chicken breast / Chicken breast (protein)"))
     }
 }

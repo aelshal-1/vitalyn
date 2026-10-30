@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 import UserNotifications
 import VitalynCore
 
@@ -109,6 +110,28 @@ enum NotificationService {
         }
     }
 
+    // MARK: Background results
+
+    /// Where tapping a notification takes the user.
+    enum OpenTarget: String {
+        case plan, coach
+    }
+
+    /// Set when a notification is tapped; the root view opens that screen and clears it.
+    static let openTargetKey = "open-target"
+
+    /// Tells the user a background request finished. Skipped while they're in the app, where the screen updates itself.
+    @MainActor
+    static func announce(id: String, title: String, body: String, open: OpenTarget) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["open": open.rawValue]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+    }
+
     // MARK: Achievements
 
     /// Sends a notification for each badge earned since the last check (the first check only records the baseline).
@@ -145,11 +168,16 @@ enum NotificationService {
     }
 }
 
-/// Shows notifications as banners even while Vitalyn is open.
+/// Shows notifications as banners even while Vitalyn is open, and opens the right screen when one is tapped.
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .list]
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let target = response.notification.request.content.userInfo["open"] as? String else { return }
+        UserDefaults.standard.set(target, forKey: NotificationService.openTargetKey)
     }
 }

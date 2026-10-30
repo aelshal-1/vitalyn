@@ -78,6 +78,24 @@ import Testing
         #expect(tip.tipEn == "b")
     }
 
+    @Test func parsesWholeStreamedBody() throws {
+        let body = """
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\"tipAr\\":\\"أ\\",\\"tipEn\\":\\"b\\"}"}}
+
+        event: message_delta
+        data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
+
+        """
+        let text = try ClaudeClient.parseStream(data: Data(body.utf8), status: 200)
+        #expect(try JSONDecoder().decode(DailyTip.self, from: Data(text.utf8)).tipEn == "b")
+        #expect(ClaudeClient.partialStreamText(Data(body.utf8)).hasPrefix("{"))
+        let error = #"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#
+        #expect(throws: ClaudeError.http(status: 429, message: "slow down")) {
+            try ClaudeClient.parseStream(data: Data(error.utf8), status: 429)
+        }
+    }
+
     @Test func streamSurfacesStopsAndErrors() throws {
         var truncated = StreamAccumulator()
         try truncated.consume(#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{"}}"#)

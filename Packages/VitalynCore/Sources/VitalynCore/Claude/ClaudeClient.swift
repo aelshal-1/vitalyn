@@ -120,17 +120,15 @@ public struct ClaudeClient: Sendable {
     }
 
     /// Sends a request constrained to `schema` and decodes the JSON reply.
-    /// `onText` receives the reply so far while it streams in.
     public func generate<T: Decodable>(
         _ type: T.Type,
         system: String,
         messages: [ClaudeMessage],
         schema: JSONValue,
         effort: ClaudeEffort = .medium,
-        maxTokens: Int = 16000,
-        onText: (@Sendable (String) -> Void)? = nil
+        maxTokens: Int = 16000
     ) async throws -> T {
-        let text = try await send(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens, onText: onText)
+        let text = try await send(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens)
         do {
             return try JSONDecoder().decode(T.self, from: Data(text.utf8))
         } catch {
@@ -145,8 +143,7 @@ public struct ClaudeClient: Sendable {
         messages: [ClaudeMessage],
         schema: JSONValue?,
         effort: ClaudeEffort = .medium,
-        maxTokens: Int = 16000,
-        onText: (@Sendable (String) -> Void)? = nil
+        maxTokens: Int = 16000
     ) async throws -> String {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ClaudeError.missingAPIKey }
         let request = makeRequest(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens)
@@ -158,16 +155,29 @@ public struct ClaudeClient: Sendable {
             return try Self.parse(data: data, status: status)
         }
         var stream = StreamAccumulator()
-        var reported = 0
         for try await line in bytes.lines {
             try stream.consume(line)
-            // Report every few hundred bytes rather than on each tiny delta.
-            if let onText, stream.text.utf8.count - reported >= 300 {
-                reported = stream.text.utf8.count
-                onText(stream.text)
-            }
         }
         return try stream.finish()
+    }
+
+    /// The reply text from a whole streamed response body (as saved by a background download).
+    public static func parseStream(data: Data, status: Int) throws -> String {
+        guard (200..<300).contains(status) else { return try parse(data: data, status: status) }
+        var stream = StreamAccumulator()
+        for line in String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline) {
+            try stream.consume(String(line))
+        }
+        return try stream.finish()
+    }
+
+    /// The reply text so far in a partial streamed body, for progress while it downloads.
+    public static func partialStreamText(_ data: Data) -> String {
+        var stream = StreamAccumulator()
+        for line in String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline) {
+            try? stream.consume(String(line))
+        }
+        return stream.text
     }
 
     public func makeRequest(

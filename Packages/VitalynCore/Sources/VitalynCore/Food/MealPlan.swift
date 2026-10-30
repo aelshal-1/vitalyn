@@ -95,53 +95,11 @@ public struct PlanIngredient: Codable, Sendable, Equatable {
     }
 }
 
-// MARK: Menu (first step of building a plan)
-
-public struct MenuMeal: Codable, Sendable, Equatable {
-    public var slot: MealSlot
-    public var nameAr: String
-    public var nameEn: String
-}
-
-public struct MenuDay: Codable, Sendable, Equatable {
-    public var dayIndex: Int
-    public var meals: [MenuMeal]
-}
-
-/// An ingredient name shared by every day of the plan, so the grocery list can add amounts up.
+/// An ingredient name already used in a plan, offered to swaps so the grocery list stays consistent.
 public struct MenuIngredient: Codable, Sendable, Equatable {
     public var nameAr: String
     public var nameEn: String
     public var category: GroceryCategory
-}
-
-/// The week's dishes and shared ingredients; each day's portions and recipes are written separately.
-public struct WeekMenu: Codable, Sendable, Equatable {
-    public var days: [MenuDay]
-    public var ingredients: [MenuIngredient]
-    public var prepAr: String
-    public var prepEn: String
-    public var notesAr: String
-    public var notesEn: String
-}
-
-/// One day's meals with portions, macros, ingredients and method.
-public struct DayMeals: Codable, Sendable, Equatable {
-    public var meals: [PlannedMeal]
-}
-
-extension WeekMenu {
-    /// Joins the menu with each day's detailed meals into the stored plan.
-    public func assemble(_ details: [Int: [PlannedMeal]]) -> WeekPlan {
-        WeekPlan(
-            days: days.sorted { $0.dayIndex < $1.dayIndex }.map { PlanDay(dayIndex: $0.dayIndex, meals: details[$0.dayIndex] ?? []) },
-            groceries: [],
-            notesAr: notesAr,
-            notesEn: notesEn,
-            prepAr: prepAr,
-            prepEn: prepEn
-        )
-    }
 }
 
 // MARK: Grocery list

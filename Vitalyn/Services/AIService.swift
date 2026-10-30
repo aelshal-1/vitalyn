@@ -75,19 +75,10 @@ final class AIService {
         return String(key.prefix(10)) + "…" + String(key.suffix(4))
     }
 
-    /// `onText` gets the reply so far as it streams in, on the main actor.
-    func run<T: Decodable & Sendable>(_ type: T.Type, _ request: AIRequest, onText: ((String) -> Void)? = nil) async throws -> T {
+    func run<T: Decodable & Sendable>(_ type: T.Type, _ request: AIRequest) async throws -> T {
         guard let key = KeychainStore.read() else { throw ClaudeError.missingAPIKey }
         let client = ClaudeClient(apiKey: key, model: model)
-        let stream = AsyncStream<String>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        let forward = Task { @MainActor in
-            for await text in stream.stream { onText?(text) }
-        }
-        defer {
-            stream.continuation.finish()
-            forward.cancel()
-        }
-        return try await client.generate(type, request, onText: onText == nil ? nil : { stream.continuation.yield($0) })
+        return try await client.generate(type, request)
     }
 }
 

@@ -42,8 +42,30 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Query private var profiles: [UserProfile]
     @State private var tab: AppTab = .today
+    @AppStorage(NotificationService.openTargetKey) private var openTarget = ""
 
     var body: some View {
+        content
+            .onAppear(perform: openRequestedScreen)
+            .onChange(of: openTarget) { _, _ in openRequestedScreen() }
+    }
+
+    /// Opens the screen a tapped notification points to.
+    private func openRequestedScreen() {
+        switch NotificationService.OpenTarget(rawValue: openTarget) {
+        case .plan:
+            UserDefaults.standard.set(FoodTab.plan.rawValue, forKey: FoodTab.storageKey)
+            tab = .food
+        case .coach:
+            tab = .coach
+        case nil:
+            return
+        }
+        openTarget = ""
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if profiles.isEmpty {
             OnboardingView { tab = .today }
         } else if sizeClass == .regular {

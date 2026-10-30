@@ -50,35 +50,46 @@ struct PlanSection: View {
     @State private var showSetup = false
     @State private var mode: Mode = .week
     @State private var dayIndex = 0
-    @State private var working = false
-    @State private var progress: WeekPlanner.Progress?
+    /// A past plan the user opened from history; nil shows the latest.
+    @State private var selectedID: String?
     @State private var swapping: String?
     @State private var error: String?
     @State private var showGroceries = false
     @State private var logging: MealInput?
     @State private var speech = SpeechService()
 
-    private var record: MealPlanRecord? { plans.first }
+    private var readyPlans: [MealPlanRecord] { plans.filter { $0.status == .ready } }
+    private var building: MealPlanRecord? { plans.first { $0.status == .building } }
+    /// A failure newer than the latest finished plan.
+    private var failed: MealPlanRecord? {
+        guard let failed = plans.first(where: { $0.status == .failed }) else { return nil }
+        return failed.createdAt > (readyPlans.first?.createdAt ?? .distantPast) ? failed : nil
+    }
+    private var record: MealPlanRecord? {
+        readyPlans.first { $0.uid == selectedID } ?? readyPlans.first
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if record == nil || showSetup { setupCard }
-            if working {
-                switch progress {
-                case let .dishes(picked, total)?:
-                    WorkingView(ar: "بختار أكلات الأسبوع… \(picked) من \(total)", en: "Choosing this week’s dishes… \(picked) of \(total)")
-                case .ingredients?:
-                    WorkingView(ar: "بجمع المكونات وخطة الطبخ…", en: "Listing ingredients and the cooking plan…")
-                case let .days(done)?:
-                    WorkingView(ar: "بكتب المقادير والوصفات… \(done) من 7 أيام", en: "Writing portions and recipes… \(done) of 7 days")
-                case nil:
-                    WorkingView(ar: "بجهز الجدول…", en: "Preparing your plan…")
-                }
-                BiText(ar: "خلّي الشاشة دي مفتوحة لحد ما يخلص.", en: "Keep this screen open until it finishes.", size: 12, weight: 400, color: VColor.muted)
+            if let building {
+                buildingCard(building)
+            } else if (record == nil && failed == nil) || showSetup {
+                setupCard
             }
+            if let failed, building == nil { failedCard(failed) }
             if let error { ErrorBanner(message: error) }
 
-            if !working, let record, let plan = record.plan {
+            if let record, let plan = record.plan {
+                if record.uid != readyPlans.first?.uid {
+                    HStack {
+                        BiText(ar: "ده جدول قديم", en: "You're viewing a past plan", size: 13, weight: 500, color: VColor.inkSecondary)
+                        Spacer()
+                        Button("ارجع للحالي · Back to current") { selectedID = nil }
+                            .font(VFont.readex(12, weight: 600))
+                    }
+                    .padding(12)
+                    .background(VColor.primarySoft, in: RoundedRectangle(cornerRadius: 14))
+                }
                 header(record)
                 Button { showGroceries = true } label: {
                     BiLabel(ar: "قائمة المشتريات", en: groceriesSubtitle(record, plan), systemImage: "cart")
@@ -112,12 +123,17 @@ struct PlanSection: View {
                     BiText(ar: plan.notesAr, en: plan.notesEn, size: 13, weight: 400, color: VColor.inkSecondary)
                 }
             }
+
+            if readyPlans.count > 1 { history }
         }
         .sheet(item: $logging) { input in MealCaptureView(input: input) }
         .sheet(isPresented: $showGroceries) {
             if let record { GroceriesView(record: record) }
         }
         .onAppear {
+            if let record { dayIndex = record.dayIndex(for: Date()) ?? 0 }
+        }
+        .onChange(of: record?.uid) { _, _ in
             if let record { dayIndex = record.dayIndex(for: Date()) ?? 0 }
         }
         .onChange(of: preset) { _, newValue in
@@ -161,68 +177,154 @@ struct PlanSection: View {
                         .background(VColor.ground, in: RoundedRectangle(cornerRadius: 14))
                     DictationButton(speech: speech, text: $request)
                 }
-                Button(action: generate) {
+                Button { generate() } label: {
                     BiLabel(ar: record == nil ? "اعمل جدول الأسبوع" : "اعمل جدول جديد", en: record == nil ? "Create this week’s plan" : "Create a new plan", systemImage: "sparkles")
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(working)
                 if record != nil {
                     Button { withAnimation { showSetup = false } } label: {
                         BiLabel(ar: "إلغاء", en: "Cancel", size: 14)
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .disabled(working)
                 }
+            }
+        }
+    }
+
+    private func buildingCard(_ record: MealPlanRecord) -> some View {
+        let written = BackgroundAI.shared.status.planMeals[record.uid] ?? 0
+        return VStack(spacing: 10) {
+            WorkingView(ar: "بكتب جدول الأسبوع… \(min(written, record.mealCount)) من \(record.mealCount) وجبة", en: "Writing your weekly plan… \(min(written, record.mealCount)) of \(record.mealCount) meals")
+            BiText(ar: "تقدر تقفل التطبيق أو تستخدم حاجة تانية — هبعتلك إشعار لما يجهز. بس متقفلوش من قائمة التطبيقات.", en: "You can leave the app or use something else — you’ll get a notification when it’s ready. Just don’t swipe it away in the app switcher.", size: 12, weight: 400, color: VColor.muted)
+        }
+    }
+
+    private func failedCard(_ record: MealPlanRecord) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ErrorBanner(message: record.errorMessage.isEmpty ? "معرفناش نعمل الجدول · Couldn't make the plan" : record.errorMessage)
+            HStack(spacing: 10) {
+                Button { retry(record) } label: {
+                    BiLabel(ar: "جرّب تاني", en: "Try again", systemImage: "arrow.clockwise", size: 14)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                Button {
+                    context.delete(record)
+                    try? context.save()
+                } label: {
+                    BiLabel(ar: "شيله", en: "Dismiss", size: 14)
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }
 
     private func generate() {
-        guard let userContext = AppData.userContext(context, health: health) else { return }
         speech.stop()
-        working = true
-        progress = nil
+        let record = MealPlanRecord()
+        record.startDate = start.date()
+        record.presetRaw = preset.rawValue
+        record.mealsPerDayRaw = mealsPerDay.rawValue
+        record.requestText = request
+        submit(record)
+    }
+
+    private func retry(_ failed: MealPlanRecord) {
+        let record = MealPlanRecord()
+        // Keep the original start date unless it has already passed.
+        record.startDate = max(failed.startDate, Calendar.current.startOfDay(for: Date()))
+        record.presetRaw = failed.presetRaw
+        record.mealsPerDayRaw = failed.mealsPerDayRaw
+        record.requestText = failed.requestText
+        context.delete(failed)
+        submit(record)
+    }
+
+    /// Saves the plan as "building" and hands the request to the background session.
+    private func submit(_ record: MealPlanRecord) {
+        guard let userContext = AppData.userContext(context, health: health) else { return }
         error = nil
-        let startDate = start.date()
-        let preset = preset
-        let mealsPerDay = mealsPerDay
-        let request = request
-        Task {
-            do {
-                let plan = try await WeekPlanner.build(ai: ai, context: userContext, preset: preset, mealsPerDay: mealsPerDay, start: startDate, request: request) { step in
-                    progress = step
-                }
-                let record = MealPlanRecord()
-                record.startDate = startDate
-                record.presetRaw = preset.rawValue
-                record.mealsPerDayRaw = mealsPerDay.rawValue
-                record.plan = plan
-                context.insert(record)
-                try? context.save()
-                dayIndex = record.dayIndex(for: Date()) ?? 0
-                mode = .week
-                showSetup = false
-            } catch {
-                self.error = error.localizedDescription
-            }
-            working = false
+        record.status = .building
+        context.insert(record)
+        try? context.save()
+        let request = AITasks.weekPlan(context: userContext, preset: record.preset, mealsPerDay: record.mealsPerDay, start: record.startDate, request: record.requestText)
+        do {
+            try BackgroundAI.shared.submit(AIJob(kind: .weekPlan, target: record.uid), request, model: ai.model)
+            showSetup = false
+            selectedID = nil
+            mode = .week
+        } catch {
+            context.delete(record)
+            try? context.save()
+            self.error = error.localizedDescription
         }
+    }
+
+    // MARK: History
+
+    /// Earlier plans, to look back at or cook again on new dates without asking Claude.
+    private var history: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            BiText(ar: "الجداول اللي فاتت", en: "Past plans", size: 16)
+            ForEach(readyPlans.filter { $0.uid != record?.uid }) { past in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rangeText(past)).font(VFont.readex(14, weight: 600))
+                            .environment(\.layoutDirection, .leftToRight)
+                        Text("\(past.preset.ar) · \(past.preset.en)").font(VFont.readex(11)).foregroundStyle(VColor.muted)
+                    }
+                    Spacer()
+                    Button("اعرضه · View") { selectedID = past.uid }
+                        .font(VFont.readex(12, weight: 600))
+                    Menu {
+                        ForEach(PlanStart.allCases) { option in
+                            Button("ابدأه \(option.ar) · Start \(option.en.lowercased())") { reuse(past, from: option) }
+                        }
+                        Button("امسحه · Delete", role: .destructive) {
+                            context.delete(past)
+                            try? context.save()
+                        }
+                    } label: {
+                        Text("استخدمه تاني · Reuse").font(VFont.readex(12, weight: 600))
+                    }
+                }
+                .padding(12)
+                .background(VColor.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
+    /// Copies a past plan onto new dates, with a fresh grocery list.
+    private func reuse(_ past: MealPlanRecord, from option: PlanStart) {
+        let copy = MealPlanRecord()
+        copy.startDate = option.date()
+        copy.presetRaw = past.presetRaw
+        copy.mealsPerDayRaw = past.mealsPerDayRaw
+        copy.requestText = past.requestText
+        copy.planData = past.planData
+        context.insert(copy)
+        try? context.save()
+        selectedID = nil
+        mode = .week
+    }
+
+    private func rangeText(_ record: MealPlanRecord) -> String {
+        let english = Locale(identifier: "en")
+        let first = record.startDate.formatted(.dateTime.day().month(.abbreviated).locale(english))
+        let last = record.date(ofDay: 6).formatted(.dateTime.day().month(.abbreviated).locale(english))
+        return "\(first) – \(last)"
     }
 
     // MARK: Plan
 
     private func header(_ record: MealPlanRecord) -> some View {
-        let english = Locale(identifier: "en")
-        let first = record.startDate.formatted(.dateTime.day().month(.abbreviated).locale(english))
-        let last = record.date(ofDay: 6).formatted(.dateTime.day().month(.abbreviated).locale(english))
-        return HStack(alignment: .center) {
+        HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 BiText(ar: "جدول الأسبوع", en: "Weekly plan", size: 18)
-                Text("\(first) – \(last)").font(VFont.readex(12)).foregroundStyle(VColor.muted)
+                Text(rangeText(record)).font(VFont.readex(12)).foregroundStyle(VColor.muted)
                     .environment(\.layoutDirection, .leftToRight)
             }
             Spacer()
-            if !showSetup {
+            if !showSetup && building == nil {
                 Button { withAnimation { showSetup = true } } label: {
                     Label("جدول جديد · New plan", systemImage: "arrow.clockwise")
                         .font(VFont.readex(12, weight: 600))
@@ -526,7 +628,7 @@ struct TodayPlanCard: View {
 
     var body: some View {
         Group {
-            if let record = plans.first, let index = record.dayIndex(for: Date()),
+            if let record = current, let index = record.dayIndex(for: Date()),
                let day = record.plan?.days.first(where: { $0.dayIndex == index }), !day.meals.isEmpty {
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
@@ -559,7 +661,7 @@ struct TodayPlanCard: View {
                 Button(action: openPlan) {
                     HStack(spacing: 12) {
                         Image(systemName: "calendar").font(.system(size: 20)).foregroundStyle(VColor.primary)
-                        BiText(ar: upcoming ? "جدول الأكل بيبدأ قريب" : "خطط أكل الأسبوع وقائمة المشتريات", en: upcoming ? "Your meal plan starts soon" : "Plan this week’s meals and grocery list", size: 14, weight: 500)
+                        BiText(ar: promptText.ar, en: promptText.en, size: 14, weight: 500)
                         Spacer()
                         Image(systemName: "chevron.forward").foregroundStyle(VColor.muted)
                     }
@@ -572,8 +674,18 @@ struct TodayPlanCard: View {
         .sheet(item: $logging) { input in MealCaptureView(input: input) }
     }
 
-    private var upcoming: Bool {
-        guard let record = plans.first else { return false }
-        return record.startDate > Date()
+    /// The newest finished plan that covers today.
+    private var current: MealPlanRecord? {
+        plans.first { $0.status == .ready && $0.dayIndex(for: Date()) != nil }
+    }
+
+    private var promptText: (ar: String, en: String) {
+        if plans.contains(where: { $0.status == .building }) {
+            return ("جدول الأكل بيتعمل… هنبعتلك إشعار لما يجهز", "Your meal plan is being made… we’ll notify you")
+        }
+        if plans.contains(where: { $0.status == .ready && $0.startDate > Date() }) {
+            return ("جدول الأكل بيبدأ قريب", "Your meal plan starts soon")
+        }
+        return ("خطط أكل الأسبوع وقائمة المشتريات", "Plan this week’s meals and grocery list")
     }
 }

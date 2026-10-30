@@ -11,9 +11,10 @@ struct CoachView: View {
     @State private var speech = SpeechService()
     @State private var draft = ""
     @State private var speaking = false
-    @State private var sending = false
-    @State private var error: String?
     @State private var mealToLog: MealInput?
+    /// Replies run as background requests, so they arrive even if the app is closed meanwhile.
+    private var jobs: AIJobStatus { BackgroundAI.shared.status }
+    private var sending: Bool { jobs.coachWaiting }
 
     private let quickPrompts: [(String, String)] = [
         ("آكل إيه دلوقتي؟", "What should I eat now?"),
@@ -32,6 +33,12 @@ struct CoachView: View {
             .background(VColor.ground)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $mealToLog) { input in MealCaptureView(input: input) }
+            .onChange(of: jobs.replyToSpeak) { _, reply in
+                guard let reply else { return }
+                speech.speak(reply)
+                speaking = true
+                jobs.replyToSpeak = nil
+            }
             .onDisappear {
                 speech.stop()
                 speech.stopSpeaking()
@@ -80,10 +87,14 @@ struct CoachView: View {
                         .id(message.persistentModelID)
                     }
                     if sending {
-                        HStack { ProgressView(); Text("بفكر… · Thinking…").font(VFont.readex(12)).foregroundStyle(VColor.muted) }
-                            .id("typing")
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack { ProgressView(); Text("بفكر… · Thinking…").font(VFont.readex(12)).foregroundStyle(VColor.muted) }
+                            Text("تقدر تقفل التطبيق — هبعتلك إشعار لما أرد · You can leave the app — you’ll get a notification when I reply")
+                                .font(VFont.readex(11)).foregroundStyle(VColor.muted)
+                        }
+                        .id("typing")
                     }
-                    if let error { ErrorBanner(message: error) }
+                    if let error = jobs.coachError { ErrorBanner(message: error) }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
@@ -188,7 +199,7 @@ struct CoachView: View {
         guard !trimmed.isEmpty, !sending else { return }
         speech.stop()
         draft = ""
-        error = nil
+        jobs.coachError = nil
 
         let history: [ClaudeMessage] = messages.suffix(16).map { message -> ClaudeMessage in
             message.isUser
@@ -202,29 +213,11 @@ struct CoachView: View {
         context.insert(userMessage)
         try? context.save()
 
-        sending = true
         let request = AITasks.coach(history: history, userMessage: trimmed, context: AppData.userContext(context, health: health))
-        Task {
-            do {
-                let reply = try await ai.run(CoachReply.self, request)
-                let message = CoachMessage()
-                message.roleRaw = "assistant"
-                message.textAr = reply.replyAr
-                message.textEn = reply.replyEn
-                message.actionsData = try? JSONEncoder().encode(reply.actions)
-                context.insert(message)
-                try? context.save()
-                for action in reply.actions where action.type == .logWorkout || action.type == .logWater {
-                    perform(action)
-                }
-                if speakReply {
-                    speech.speak(reply.replyAr)
-                    speaking = true
-                }
-            } catch {
-                self.error = error.localizedDescription
-            }
-            sending = false
+        do {
+            try BackgroundAI.shared.submit(AIJob(kind: .coachReply, speak: speakReply), request, model: ai.model)
+        } catch {
+            jobs.coachError = error.localizedDescription
         }
     }
 
@@ -233,6 +226,18 @@ struct CoachView: View {
     }
 
     private func perform(_ action: CoachAction) {
+        if action.type == .logMeal, let meal = action.meal {
+            mealToLog = .prefilled(meal, slot: nil)
+        } else {
+            CoachActions.apply(action, context: context, health: health)
+        }
+    }
+}
+
+/// Coach actions that log things straight away (workouts and water); meals are reviewed first.
+@MainActor
+enum CoachActions {
+    static func apply(_ action: CoachAction, context: ModelContext, health: HealthService) {
         switch action.type {
         case .logWorkout:
             guard let workout = action.workout else { return }
@@ -255,10 +260,7 @@ struct CoachView: View {
             WaterStore.add(glasses)
             Task { await health.saveWater(glasses: glasses, date: Date()) }
             AppData.publishSnapshot(context, health: health)
-        case .logMeal:
-            guard let meal = action.meal else { return }
-            mealToLog = .prefilled(meal, slot: nil)
-        case .suggestVideos:
+        case .logMeal, .suggestVideos:
             break
         }
     }

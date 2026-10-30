@@ -17,9 +17,11 @@ struct TodayView: View {
     @State private var tipError: String?
     @State private var water = WaterStore.glasses()
     var openProfile: () -> Void = {}
+    var openPlan: () -> Void = {}
 
-    init(openProfile: @escaping () -> Void = {}) {
+    init(openProfile: @escaping () -> Void = {}, openPlan: @escaping () -> Void = {}) {
         self.openProfile = openProfile
+        self.openPlan = openPlan
         let start = Calendar.current.startOfDay(for: Date())
         _todayMeals = Query(filter: #Predicate<MealEntry> { $0.date >= start }, sort: \.date)
         _todayWorkouts = Query(filter: #Predicate<WorkoutEntry> { $0.date >= start })
@@ -49,6 +51,7 @@ struct TodayView: View {
                 caloriesCard
                 activityRow
                 coachCard
+                TodayPlanCard(openPlan: openPlan)
                 mealsSection
                 Button { input = .photo } label: {
                     BiLabel(ar: "صوّر وجبة", en: "Snap a meal", systemImage: "camera", size: 16)

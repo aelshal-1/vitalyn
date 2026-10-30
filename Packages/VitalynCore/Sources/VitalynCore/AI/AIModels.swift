@@ -217,15 +217,48 @@ public struct PlannedMeal: Codable, Sendable, Equatable {
     public var proteinG: Double
     public var carbsG: Double
     public var fatG: Double
+    public var ingredients: [PlanIngredient]
     public var recipeAr: String
     public var recipeEn: String
+}
+
+extension PlannedMeal {
+    /// Plans saved before meals listed their ingredients decode with none.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        slot = try container.decode(MealSlot.self, forKey: .slot)
+        nameAr = try container.decode(String.self, forKey: .nameAr)
+        nameEn = try container.decode(String.self, forKey: .nameEn)
+        kcal = try container.decode(Double.self, forKey: .kcal)
+        proteinG = try container.decode(Double.self, forKey: .proteinG)
+        carbsG = try container.decode(Double.self, forKey: .carbsG)
+        fatG = try container.decode(Double.self, forKey: .fatG)
+        ingredients = try container.decodeIfPresent([PlanIngredient].self, forKey: .ingredients) ?? []
+        recipeAr = try container.decode(String.self, forKey: .recipeAr)
+        recipeEn = try container.decode(String.self, forKey: .recipeEn)
+    }
 }
 
 public struct PlanDay: Codable, Sendable, Equatable {
     public var dayIndex: Int
     public var meals: [PlannedMeal]
+
+    public init(dayIndex: Int, meals: [PlannedMeal]) {
+        self.dayIndex = dayIndex
+        self.meals = meals
+    }
+
+    public var totals: MacroTargets {
+        MacroTargets(
+            calories: Int(meals.reduce(0) { $0 + $1.kcal }.rounded()),
+            proteinGrams: Int(meals.reduce(0) { $0 + $1.proteinG }.rounded()),
+            carbsGrams: Int(meals.reduce(0) { $0 + $1.carbsG }.rounded()),
+            fatGrams: Int(meals.reduce(0) { $0 + $1.fatG }.rounded())
+        )
+    }
 }
 
+/// Grocery list as older plans stored it; newer plans build it from meal ingredients.
 public struct GroceryItem: Codable, Sendable, Equatable {
     public var nameAr: String
     public var nameEn: String
@@ -237,6 +270,40 @@ public struct WeekPlan: Codable, Sendable, Equatable {
     public var groceries: [GroceryItem]
     public var notesAr: String
     public var notesEn: String
+    /// What to cook ahead and when.
+    public var prepAr: String
+    public var prepEn: String
+
+    public init(days: [PlanDay], groceries: [GroceryItem], notesAr: String, notesEn: String, prepAr: String, prepEn: String) {
+        self.days = days
+        self.groceries = groceries
+        self.notesAr = notesAr
+        self.notesEn = notesEn
+        self.prepAr = prepAr
+        self.prepEn = prepEn
+    }
+}
+
+extension WeekPlan {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        days = try container.decode([PlanDay].self, forKey: .days)
+        groceries = try container.decodeIfPresent([GroceryItem].self, forKey: .groceries) ?? []
+        notesAr = try container.decode(String.self, forKey: .notesAr)
+        notesEn = try container.decode(String.self, forKey: .notesEn)
+        prepAr = try container.decodeIfPresent(String.self, forKey: .prepAr) ?? ""
+        prepEn = try container.decodeIfPresent(String.self, forKey: .prepEn) ?? ""
+    }
+
+    /// Every ingredient name already in the plan, for keeping swaps consistent with the grocery list.
+    public var ingredientNames: [MenuIngredient] {
+        var seen = Set<String>()
+        return days.flatMap { $0.meals.flatMap(\.ingredients) }.compactMap { ingredient in
+            seen.insert(ingredient.nameEn.lowercased()).inserted
+                ? MenuIngredient(nameAr: ingredient.nameAr, nameEn: ingredient.nameEn, category: ingredient.category)
+                : nil
+        }
+    }
 }
 
 public struct DailyTip: Codable, Sendable, Equatable {

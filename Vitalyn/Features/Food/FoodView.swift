@@ -5,6 +5,8 @@ import VitalynCore
 enum FoodTab: String, CaseIterable {
     case log, products, plan
 
+    static let storageKey = "food-tab"
+
     var ar: String {
         switch self {
         case .log: "سجل الأكل"
@@ -23,7 +25,8 @@ enum FoodTab: String, CaseIterable {
 }
 
 struct FoodView: View {
-    @State private var tab: FoodTab = .log
+    /// Stored so other screens (Today's plan card) can open a specific tab.
+    @AppStorage(FoodTab.storageKey) private var tab: FoodTab = .log
 
     var body: some View {
         NavigationStack {

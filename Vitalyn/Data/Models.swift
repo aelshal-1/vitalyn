@@ -254,9 +254,23 @@ final class MealPlanRecord {
     var createdAt: Date = Date()
     var startDate: Date = Date()
     var presetRaw: String = PlanPreset.egyptianHome.rawValue
+    var mealsPerDayRaw: String = MealsPerDay.threeMealsTwoSnacks.rawValue
     var planData: Data = Data()
+    /// Grocery-list lines (GroceryLine.id) already bought.
+    var checkedGroceries: [String] = []
 
     init() {}
+
+    /// The plan day for `date`, or nil when the date is outside the plan's week.
+    func dayIndex(for date: Date) -> Int? {
+        let calendar = Calendar.current
+        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: date)).day ?? -1
+        return (0..<7).contains(offset) ? offset : nil
+    }
+
+    func date(ofDay index: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: index, to: startDate) ?? startDate
+    }
 
     var plan: WeekPlan? {
         get { try? JSONDecoder().decode(WeekPlan.self, from: planData) }

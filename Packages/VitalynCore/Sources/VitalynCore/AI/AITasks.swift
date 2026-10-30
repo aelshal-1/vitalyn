@@ -66,9 +66,9 @@ public enum PlanPreset: String, Codable, Sendable, CaseIterable, Identifiable {
         case .egyptianHome: "Base meals on everyday Egyptian home cooking (ful, eggs, baladi bread, grilled chicken, kofta, fish, rice, molokhia, salads, lentil soup) in healthy portions."
         case .highProtein: "Push protein toward the top of the target in every meal using lean, affordable sources."
         case .budget: "Keep ingredients cheap and widely available in Egyptian supermarkets; reuse ingredients across days."
-        case .intermittentFasting: "Fit all meals in an 8-hour eating window (about 12:00–20:00); no breakfast slot, use lunch, snack and dinner."
+        case .intermittentFasting: "Fit all meals in an 8-hour eating window (about 12:00–20:00); the first meal of the day breaks the fast around noon, whatever its slot."
         case .lowCarb: "Keep carbs low (about 25% of calories) while hitting protein; favor vegetables, legumes in small portions."
-        case .ramadan: "Plan suhoor and iftar (map suhoor to breakfast, iftar to dinner, one snack between); hydrating foods, dates at iftar."
+        case .ramadan: "Plan iftar (the dinner slot), one snack between, and suhoor (the breakfast slot); hydrating foods, dates at iftar."
         }
     }
 }
@@ -266,6 +266,14 @@ public enum AITasks {
 
     // MARK: Plans
 
+    static let ingredientSchema = JSONSchema.object([
+        ("nameAr", JSONSchema.string()),
+        ("nameEn", JSONSchema.string()),
+        ("amount", JSONSchema.number("Amount to buy for this meal")),
+        ("unit", JSONSchema.enumeration(IngredientUnit.allCases.map(\.rawValue), description: "g = raw/uncooked weight, ml for liquids, piece for countable items (eggs, loaves, fruit)")),
+        ("category", JSONSchema.enumeration(GroceryCategory.allCases.map(\.rawValue)))
+    ])
+
     static let plannedMealSchema = JSONSchema.object([
         ("slot", JSONSchema.enumeration(MealSlot.allCases.map(\.rawValue))),
         ("nameAr", JSONSchema.string()),
@@ -274,39 +282,90 @@ public enum AITasks {
         ("proteinG", JSONSchema.number()),
         ("carbsG", JSONSchema.number()),
         ("fatG", JSONSchema.number()),
-        ("recipeAr", JSONSchema.string("Ingredients with grams and a one-line method, Egyptian Arabic")),
+        ("ingredients", JSONSchema.array(ingredientSchema, description: "Every ingredient except water, salt and pinches of spice")),
+        ("recipeAr", JSONSchema.string("Method only, 1–2 short sentences, Egyptian Arabic (ingredients are listed separately)")),
         ("recipeEn", JSONSchema.string("Same in English"))
     ])
 
-    public static let weekPlanSchema = JSONSchema.object([
+    public static let weekMenuSchema = JSONSchema.object([
         ("days", JSONSchema.array(JSONSchema.object([
             ("dayIndex", JSONSchema.integer("0 = first day of the plan … 6")),
-            ("meals", JSONSchema.array(plannedMealSchema))
+            ("meals", JSONSchema.array(JSONSchema.object([
+                ("slot", JSONSchema.enumeration(MealSlot.allCases.map(\.rawValue))),
+                ("nameAr", JSONSchema.string("Dish name, Egyptian Arabic")),
+                ("nameEn", JSONSchema.string("Dish name, English"))
+            ])))
         ]), description: "Exactly 7 days")),
-        ("groceries", JSONSchema.array(JSONSchema.object([
+        ("ingredients", JSONSchema.array(JSONSchema.object([
             ("nameAr", JSONSchema.string()),
-            ("nameEn", JSONSchema.string()),
-            ("quantity", JSONSchema.string("Total for the week, e.g. 1.5 kg"))
-        ]))),
-        ("notesAr", JSONSchema.string("Short notes about the plan, Egyptian Arabic")),
+            ("nameEn", JSONSchema.string("Short canonical name, e.g. Chicken breast")),
+            ("category", JSONSchema.enumeration(GroceryCategory.allCases.map(\.rawValue)))
+        ]), description: "Every ingredient the week's dishes need, each listed once")),
+        ("prepAr", JSONSchema.string("Short cooking plan for the week: what to cook ahead, on which day, and leftovers to reuse, Egyptian Arabic")),
+        ("prepEn", JSONSchema.string("Same in English")),
+        ("notesAr", JSONSchema.string("One or two short notes about the plan, Egyptian Arabic")),
         ("notesEn", JSONSchema.string("Same in English"))
     ])
 
-    public static func weekPlan(context: UserContext, preset: PlanPreset, request: String) -> AIRequest {
-        let system = persona + "\nYou design weekly meal plans.\n\n" + context.promptText()
-        var instruction = """
-        Create a 7-day meal plan. Each day should land within about 5% of the calorie target and reach the protein target. \
-        Style: \(preset.instruction) Vary meals across the week and keep recipes simple. Add a combined grocery list.
-        """
-        if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
-        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekPlanSchema, effort: .medium, maxTokens: 16000)
+    public static let dayMealsSchema = JSONSchema.object([
+        ("meals", JSONSchema.array(plannedMealSchema, description: "The given dishes, in the given order"))
+    ])
+
+    static func dayLabel(_ index: Int, start: Date) -> String {
+        let date = Calendar(identifier: .gregorian).date(byAdding: .day, value: index, to: start) ?? start
+        return date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "en_US")))
     }
 
-    public static func swapMeal(context: UserContext, meal: PlannedMeal, request: String) -> AIRequest {
+    static func ingredientList(_ ingredients: [MenuIngredient]) -> String {
+        ingredients.map { "- \($0.nameEn) / \($0.nameAr) (\($0.category.rawValue))" }.joined(separator: "\n")
+    }
+
+    /// Step 1 of a weekly plan: the dishes for every day and the shared ingredient names.
+    public static func weekMenu(context: UserContext, preset: PlanPreset, mealsPerDay: MealsPerDay, start: Date, request: String) -> AIRequest {
+        let system = persona + "\nYou design weekly meal plans that people actually cook and shop for.\n\n" + context.promptText()
+        let slots = mealsPerDay.slots(for: preset).map(\.rawValue).joined(separator: ", ")
+        let days = (0..<7).map { "- Day \($0): \(dayLabel($0, start: start))" }.joined(separator: "\n")
+        var instruction = """
+        Plan the dishes for a 7-day meal plan:
+        \(days)
+        Every day has exactly these meals, in this order: \(slots).
+        Style: \(preset.instruction)
+        Pick dishes that together can land near the daily calorie target and reach the protein target. Vary the dishes \
+        across the week, but reuse ingredients so little goes to waste, and plan batch cooking and leftovers where it saves \
+        time (for example grill chicken once for two days). Give dish names only; amounts come later.
+        List every ingredient the week needs once, with a short canonical name and its grocery category.
+        """
+        if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekMenuSchema, effort: .medium, maxTokens: 8000)
+    }
+
+    /// Step 2, run for each day: portions, macros, ingredients and method for that day's dishes.
+    public static func planDay(context: UserContext, menu: WeekMenu, dayIndex: Int, start: Date, request: String) -> AIRequest {
+        let system = persona + "\nYou write the portions and recipes for one day of a weekly meal plan.\n\n" + context.promptText()
+        let meals = menu.days.first { $0.dayIndex == dayIndex }?.meals ?? []
+        let dishes = meals.enumerated().map { "\($0.offset + 1). \($0.element.slot.rawValue): \($0.element.nameEn) / \($0.element.nameAr)" }.joined(separator: "\n")
+        var instruction = """
+        Day \(dayIndex) of the plan is \(dayLabel(dayIndex, start: start)). Its dishes, in order:
+        \(dishes)
+        Portion them so the day lands within about 5% of the calorie target and reaches the protein target, with kcal and \
+        macros per meal. List each meal's ingredients in the amount to buy: raw/uncooked grams, ml for liquids, pieces for \
+        eggs, bread loaves and fruit. Count cooking oil. When an ingredient is in this list, use its exact names:
+        \(ingredientList(menu.ingredients))
+        """
+        if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: dayMealsSchema, effort: .medium, maxTokens: 8000)
+    }
+
+    public static func swapMeal(context: UserContext, meal: PlannedMeal, ingredients: [MenuIngredient], request: String) -> AIRequest {
         let system = persona + "\n\n" + context.promptText()
-        var instruction = "Suggest one different \(meal.slot.rawValue) to replace \"\(meal.nameEn)\" with similar kcal (\(Int(meal.kcal))) and protein (\(Int(meal.proteinG)) g)."
-        if !request.isEmpty { instruction += " The user wants: \(request)" }
-        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: plannedMealSchema, effort: .low, maxTokens: 3000)
+        var instruction = """
+        Suggest one different \(meal.slot.rawValue) to replace "\(meal.nameEn)" in the user's weekly plan, with similar kcal \
+        (\(Int(meal.kcal))) and protein (\(Int(meal.proteinG)) g). List its ingredients in the amount to buy (raw grams, ml, \
+        or pieces). Prefer ingredients already on this week's grocery list and use their exact names:
+        \(ingredientList(ingredients))
+        """
+        if !request.isEmpty { instruction += "\nThe user wants: \(request)" }
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: plannedMealSchema, effort: .low, maxTokens: 4000)
     }
 
     // MARK: Workouts
@@ -395,7 +454,8 @@ public enum AITasks {
             "product": productSchema,
             "coach": coachSchema,
             "tip": tipSchema,
-            "weekPlan": weekPlanSchema,
+            "weekMenu": weekMenuSchema,
+            "dayMeals": dayMealsSchema,
             "plannedMeal": plannedMealSchema,
             "workouts": workoutsSchema,
             "healthItems": healthItemsSchema,

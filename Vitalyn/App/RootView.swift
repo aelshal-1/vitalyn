@@ -80,7 +80,10 @@ struct RootView: View {
         switch tab {
         case .today:
             NavigationStack {
-                TodayView(openProfile: { self.tab = .me })
+                TodayView(openProfile: { self.tab = .me }, openPlan: {
+                    UserDefaults.standard.set(FoodTab.plan.rawValue, forKey: FoodTab.storageKey)
+                    self.tab = .food
+                })
                     .toolbar(.hidden, for: .navigationBar)
             }
         case .food:

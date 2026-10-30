@@ -87,7 +87,8 @@ jobs:
       # Compiler errors last, so they're easy to find at the end of the log.
       - name: Compiler errors
         if: failure()
-        run: grep -E "^e: |error:|ERROR:" "$RUNNER_TEMP/build.log" | head -300 || true
+        run: |
+          grep -E "^e: |error:|ERROR:" "$RUNNER_TEMP/build.log" | head -300 || true
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk "Vitalyn-${{ github.run_number }}.apk"

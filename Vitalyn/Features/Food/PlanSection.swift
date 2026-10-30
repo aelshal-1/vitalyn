@@ -192,9 +192,17 @@ struct PlanSection: View {
     }
 
     private func buildingCard(_ record: MealPlanRecord) -> some View {
-        let written = BackgroundAI.shared.status.planMeals[record.uid] ?? 0
+        let written = min(BackgroundAI.shared.status.planMeals[record.uid] ?? 0, record.mealCount)
         return VStack(spacing: 10) {
-            WorkingView(ar: "بكتب جدول الأسبوع… \(min(written, record.mealCount)) من \(record.mealCount) وجبة", en: "Writing your weekly plan… \(min(written, record.mealCount)) of \(record.mealCount) meals")
+            TimelineView(.periodic(from: record.createdAt, by: 1)) { timeline in
+                let elapsed = Int(timeline.date.timeIntervalSince(record.createdAt))
+                let clock = String(format: "%d:%02d", elapsed / 60, elapsed % 60)
+                if written > 0 {
+                    WorkingView(ar: "بكتب جدول الأسبوع… \(written) من \(record.mealCount) وجبة · \(clock)", en: "Writing your weekly plan… \(written) of \(record.mealCount) meals · \(clock)")
+                } else {
+                    WorkingView(ar: "بكتب جدول الأسبوع… \(clock) · ممكن ياخد كام دقيقة", en: "Writing your weekly plan… \(clock) · this can take a few minutes")
+                }
+            }
             BiText(ar: "تقدر تقفل التطبيق أو تستخدم حاجة تانية — هبعتلك إشعار لما يجهز. بس متقفلوش من قائمة التطبيقات.", en: "You can leave the app or use something else — you’ll get a notification when it’s ready. Just don’t swipe it away in the app switcher.", size: 12, weight: 400, color: VColor.muted)
         }
     }

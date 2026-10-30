@@ -288,13 +288,33 @@ public enum AITasks {
     ])
 
     public static let weekPlanSchema = JSONSchema.object([
+        ("ingredients", JSONSchema.array(JSONSchema.object([
+            ("nameAr", JSONSchema.string()),
+            ("nameEn", JSONSchema.string("Short name, e.g. Chicken breast")),
+            ("category", JSONSchema.enumeration(GroceryCategory.allCases.map(\.rawValue)))
+        ]), description: "Every ingredient the week needs, each once (water, salt and pinches of spice excluded)")),
         ("days", JSONSchema.array(JSONSchema.object([
             ("dayIndex", JSONSchema.integer("0 = first day of the plan … 6")),
-            ("meals", JSONSchema.array(plannedMealSchema, description: "The day's meals in the given order"))
+            ("meals", JSONSchema.array(JSONSchema.object([
+                ("slot", JSONSchema.enumeration(MealSlot.allCases.map(\.rawValue))),
+                ("nameAr", JSONSchema.string("Short dish name")),
+                ("nameEn", JSONSchema.string("Short dish name")),
+                ("kcal", JSONSchema.number()),
+                ("proteinG", JSONSchema.number()),
+                ("carbsG", JSONSchema.number()),
+                ("fatG", JSONSchema.number()),
+                ("items", JSONSchema.array(JSONSchema.object([
+                    ("ingredient", JSONSchema.integer("Position in the ingredients list, from 0")),
+                    ("amount", JSONSchema.number("Amount to buy for this meal")),
+                    ("unit", JSONSchema.enumeration(IngredientUnit.allCases.map(\.rawValue), description: "g = raw/uncooked weight, ml for liquids, piece for eggs, loaves, fruit"))
+                ]))),
+                ("recipeAr", JSONSchema.string("One short sentence of method, Egyptian Arabic")),
+                ("recipeEn", JSONSchema.string("Same in English"))
+            ]), description: "The day's meals in the given order"))
         ]), description: "Exactly 7 days")),
-        ("prepAr", JSONSchema.string("Short cooking plan for the week: what to cook ahead, on which day, and leftovers to reuse, Egyptian Arabic")),
+        ("prepAr", JSONSchema.string("Short cooking plan for the week: what to cook ahead and on which day, Egyptian Arabic")),
         ("prepEn", JSONSchema.string("Same in English")),
-        ("notesAr", JSONSchema.string("One or two short notes about the plan, Egyptian Arabic")),
+        ("notesAr", JSONSchema.string("One short note about the plan, Egyptian Arabic")),
         ("notesEn", JSONSchema.string("Same in English"))
     ])
 
@@ -320,12 +340,12 @@ public enum AITasks {
         Style: \(preset.instruction)
         Each day should land within about 5% of the calorie target and reach the protein target. Vary the dishes across \
         the week, but reuse ingredients so little goes to waste, and plan batch cooking and leftovers where it saves time.
-        List each meal's ingredients in the amount to buy: raw/uncooked grams, ml for liquids, pieces for eggs, bread loaves \
-        and fruit; count cooking oil. Use exactly the same names for the same ingredient every time it appears, so the \
-        grocery list can add the week up. Keep each method to one or two sentences.
+        First list every ingredient the week needs, once each. Then, for each meal, point to its ingredients by their \
+        position in that list with the amount to buy: raw/uncooked grams, ml for liquids, pieces for eggs, bread loaves \
+        and fruit; count cooking oil. Keep dish names short and each method to one short sentence.
         """
         if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
-        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekPlanSchema, effort: .low, maxTokens: 64000)
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekPlanSchema, effort: .low, maxTokens: 32000)
     }
 
     public static func swapMeal(context: UserContext, meal: PlannedMeal, ingredients: [MenuIngredient], request: String) -> AIRequest {

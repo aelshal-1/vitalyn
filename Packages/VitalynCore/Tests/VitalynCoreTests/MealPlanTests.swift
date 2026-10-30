@@ -60,7 +60,22 @@ import Testing
         #expect(text.contains("Day 0: Saturday"))
         #expect(text.contains("breakfast, snack, lunch, snack, dinner"))
         #expect(text.contains("fish on Friday"))
-        #expect(request.maxTokens == 64000)
+        #expect(request.maxTokens == 32000)
+    }
+
+    @Test func draftSpellsOutIngredients() throws {
+        let json = """
+        {"ingredients":[{"nameAr":"بيض","nameEn":"Eggs","category":"protein"},{"nameAr":"عيش بلدي","nameEn":"Baladi bread","category":"bakery"}],
+         "days":[{"dayIndex":1,"meals":[]},{"dayIndex":0,"meals":[{"slot":"breakfast","nameAr":"بيض وعيش","nameEn":"Eggs and bread","kcal":420,"proteinG":22,"carbsG":45,"fatG":14,
+           "items":[{"ingredient":0,"amount":2,"unit":"piece"},{"ingredient":1,"amount":0.5,"unit":"piece"},{"ingredient":9,"amount":5,"unit":"g"}],"recipeAr":"","recipeEn":""}]}],
+         "prepAr":"","prepEn":"","notesAr":"","notesEn":""}
+        """
+        let plan = try JSONDecoder().decode(WeekPlanDraft.self, from: Data(json.utf8)).plan
+        #expect(plan.days.map(\.dayIndex) == [0, 1])
+        let ingredients = plan.days[0].meals[0].ingredients
+        #expect(ingredients.map(\.nameEn) == ["Eggs", "Baladi bread"])
+        #expect(ingredients[1].category == .bakery)
+        #expect(GroceryList.build(plan).map(\.quantity) == ["2 pcs", "1 pcs"])
     }
 
     @Test func swapOffersThePlansIngredients() throws {

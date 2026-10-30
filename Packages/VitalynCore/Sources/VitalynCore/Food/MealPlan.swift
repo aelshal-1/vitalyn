@@ -102,6 +102,62 @@ public struct MenuIngredient: Codable, Sendable, Equatable {
     public var category: GroceryCategory
 }
 
+// MARK: Compact plan (as Claude writes it)
+
+/// A meal ingredient as a position in the week's ingredient list, so each name is written once
+/// instead of in every meal (Arabic names are long in tokens, and a week has ~35 meals).
+public struct DraftItem: Codable, Sendable, Equatable {
+    public var ingredient: Int
+    public var amount: Double
+    public var unit: IngredientUnit
+}
+
+public struct DraftMeal: Codable, Sendable, Equatable {
+    public var slot: MealSlot
+    public var nameAr: String
+    public var nameEn: String
+    public var kcal: Double
+    public var proteinG: Double
+    public var carbsG: Double
+    public var fatG: Double
+    public var items: [DraftItem]
+    public var recipeAr: String
+    public var recipeEn: String
+}
+
+public struct DraftDay: Codable, Sendable, Equatable {
+    public var dayIndex: Int
+    public var meals: [DraftMeal]
+}
+
+public struct WeekPlanDraft: Codable, Sendable, Equatable {
+    public var ingredients: [MenuIngredient]
+    public var days: [DraftDay]
+    public var prepAr: String
+    public var prepEn: String
+    public var notesAr: String
+    public var notesEn: String
+
+    /// The stored plan, with every meal's ingredients spelled out. Items pointing outside the list are dropped.
+    public var plan: WeekPlan {
+        let days = days.sorted { $0.dayIndex < $1.dayIndex }.map { day in
+            PlanDay(dayIndex: day.dayIndex, meals: day.meals.map { meal in
+                PlannedMeal(
+                    slot: meal.slot, nameAr: meal.nameAr, nameEn: meal.nameEn,
+                    kcal: meal.kcal, proteinG: meal.proteinG, carbsG: meal.carbsG, fatG: meal.fatG,
+                    ingredients: meal.items.compactMap { item in
+                        guard ingredients.indices.contains(item.ingredient) else { return nil }
+                        let ingredient = ingredients[item.ingredient]
+                        return PlanIngredient(nameAr: ingredient.nameAr, nameEn: ingredient.nameEn, amount: item.amount, unit: item.unit, category: ingredient.category)
+                    },
+                    recipeAr: meal.recipeAr, recipeEn: meal.recipeEn
+                )
+            })
+        }
+        return WeekPlan(days: days, groceries: [], notesAr: notesAr, notesEn: notesEn, prepAr: prepAr, prepEn: prepEn)
+    }
+}
+
 // MARK: Grocery list
 
 public struct GroceryLine: Sendable, Equatable, Identifiable {

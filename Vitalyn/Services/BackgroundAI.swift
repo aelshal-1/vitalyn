@@ -22,7 +22,8 @@ struct AIJob: Codable, Equatable {
 @MainActor
 @Observable
 final class AIJobStatus {
-    /// Meals written so far, by plan uid.
+    /// Meals written so far, by plan uid. iOS may hand over a background reply only once it's
+    /// complete, so this can stay at 0 until the end.
     var planMeals: [String: Int] = [:]
     var coachWaiting = false
     var coachError: String?
@@ -53,7 +54,7 @@ final class BackgroundAI: NSObject {
         configuration.sessionSendsLaunchEvents = true
         // Streamed replies send bytes regularly, so a long silence means the connection is gone.
         configuration.timeoutIntervalForRequest = 300
-        configuration.timeoutIntervalForResource = 60 * 60
+        configuration.timeoutIntervalForResource = 20 * 60
         return URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
     }()
 
@@ -185,7 +186,8 @@ final class BackgroundAI: NSObject {
             if status >= 500 { return 10 }
             return nil
         }
-        if let error = error as? URLError, error.code != .cancelled { return 5 }
+        // A timeout already took many minutes; fail so the user can choose to try again.
+        if let error = error as? URLError, error.code != .cancelled, error.code != .timedOut { return 5 }
         return nil
     }
 
@@ -206,7 +208,7 @@ final class BackgroundAI: NSObject {
         guard let record = try? context.fetch(FetchDescriptor<MealPlanRecord>(predicate: #Predicate { $0.uid == uid })).first else { return }
         do {
             let text = try result.get()
-            record.plan = try JSONDecoder().decode(WeekPlan.self, from: Data(text.utf8))
+            record.plan = try JSONDecoder().decode(WeekPlanDraft.self, from: Data(text.utf8)).plan
             record.status = .ready
             record.errorMessage = ""
             try? context.save()

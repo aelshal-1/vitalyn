@@ -60,6 +60,8 @@ adb logcat -c
 launch
 shot 01-onboarding 6
 check_crash onboarding
+tap "Next" && shot 01b-onboarding-step2
+check_crash onboarding-step2
 
 # 2. Seed a profile, a meal and an InBody scan, then open the main app
 adb shell am force-stop $PKG
@@ -71,6 +73,13 @@ check_crash today
 
 tap "Food" && shot 03-food
 check_crash food
+tap "Type or say" && shot 03b-meal-text
+check_crash meal-text
+adb shell input keyevent KEYCODE_BACK
+tap "Scan a product barcode" && shot 03c-barcode 5
+check_crash barcode
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 tap "Products" && shot 04-products
 tap "Weekly plan" && shot 05-plan
 check_crash plan
@@ -85,9 +94,17 @@ check_crash body
 adb shell input keyevent KEYCODE_BACK
 tap "Body scans" && shot 10-inbody
 check_crash inbody
+tap "Add a new InBody" && shot 10b-inbody-new
+check_crash inbody-new
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 adb shell input keyevent KEYCODE_BACK
 tap "Activity" && shot 11-activity
 check_crash activity
+tap "Log workout" && shot 11b-log-workout
+check_crash log-workout
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 adb shell input keyevent KEYCODE_BACK
 tap "Achievements" && shot 12-achievements
 check_crash achievements

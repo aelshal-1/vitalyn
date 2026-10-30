@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -86,10 +87,21 @@ object VFont {
         },
     )
 
-    /** Same idea as the iOS `VFont.readex(size, weight:)`; weight is the CSS-style number (400 = regular). */
+    /**
+     * Same idea as the iOS `VFont.readex(size, weight:)`; weight is the CSS-style number (400 = regular).
+     * Like SwiftUI, each paragraph takes its direction from its own text (so English keeps its full stop
+     * at the end) while lines stay on the leading (right) edge of the Arabic layout.
+     */
     fun style(size: Float, weight: Int = 400, color: Color = Color.Unspecified): TextStyle {
         val snapped = weights.minBy { kotlin.math.abs(it - weight) }
-        return TextStyle(fontFamily = readex, fontSize = size.sp, fontWeight = FontWeight(snapped), color = color)
+        return TextStyle(
+            fontFamily = readex,
+            fontSize = size.sp,
+            fontWeight = FontWeight(snapped),
+            color = color,
+            textDirection = TextDirection.Content,
+            textAlign = TextAlign.Right,
+        )
     }
 }
 
@@ -171,7 +183,7 @@ fun BiText(
     enSize: Float? = null,
     alignment: Alignment.Horizontal = Alignment.Start,
 ) {
-    val textAlign = if (alignment == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
+    val textAlign = if (alignment == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Right
     Column(
         modifier = modifier.clearAndSetSemantics { contentDescription = "$ar — $en" },
         horizontalAlignment = alignment,

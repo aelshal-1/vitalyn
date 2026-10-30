@@ -53,7 +53,7 @@ launch() {
 }
 
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+for p in POST_NOTIFICATIONS CAMERA RECORD_AUDIO; do adb shell pm grant $PKG android.permission.$p 2>/dev/null || true; done
 adb logcat -c
 
 # 1. First launch: onboarding

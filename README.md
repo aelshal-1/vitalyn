@@ -1,10 +1,11 @@
 # Vitalyn
 
-تطبيق صحة شخصي لـ iPhone و iPad و Apple Watch (مع Widgets)، بيستخدم Claude API عشان يحلل InBody والأكل والنشاط ويقترح وجبات ورياضة ويتابعك يوم بيوم.
+تطبيق صحة شخصي لـ iPhone و iPad و Apple Watch و **Android** (مع Widgets)، بيستخدم Claude API عشان يحلل InBody والأكل والنشاط ويقترح وجبات ورياضة ويتابعك يوم بيوم.
 
 - الخطة الكاملة: [docs/PLAN.md](docs/PLAN.md)
 - إعداد Apple + GitHub + TestFlight: [docs/SETUP.md](docs/SETUP.md)
 - تجربة التطبيق: [docs/TESTING.md](docs/TESTING.md)
+- نسخة Android وإزاي تنزّلها: [docs/ANDROID.md](docs/ANDROID.md)
 
 ## تركيبة المشروع
 
@@ -16,7 +17,8 @@
 | `Shared/` | الألوان والخطوط والمكونات المشتركة بين التطبيق والـ Widgets |
 | `Packages/VitalynCore/` | المنطق: Claude API client، الـ prompts والـ schemas، حسابات السعرات والماكروز، الإنجازات، الباركود + الـ unit tests |
 | `fastlane/` | البناء والرفع لـ TestFlight |
-| `.github/workflows/` | `ci.yml` (build + tests على كل push) و `testflight.yml` (رفع على TestFlight) |
+| `android/` | تطبيق Android (Kotlin + Jetpack Compose) — شوف [docs/ANDROID.md](docs/ANDROID.md) |
+| `.github/workflows/` | `ci.yml` (build + tests على كل push) و `testflight.yml` (رفع على TestFlight) و `android.yml` (APK على كل push) |
 
 ## البناء
 

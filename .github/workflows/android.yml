@@ -103,6 +103,8 @@ jobs:
   smoke:
     name: Emulator smoke test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 45
     defaults:
       run:
@@ -143,3 +145,17 @@ jobs:
         with:
           name: smoke-screens-${{ github.run_number }}
           path: android/smoke/
+
+      # Also keeps the latest screenshots on the ci/smoke-screens branch, to look at without downloading artifacts.
+      - name: Publish screenshots to ci/smoke-screens
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          [ -d smoke ] || exit 0
+          cd smoke
+          rm -f ui.xml
+          git init -q -b ci/smoke-screens
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Smoke test screenshots for ${GITHUB_SHA::7} (run ${{ github.run_number }})"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci/smoke-screens

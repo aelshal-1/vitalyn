@@ -332,12 +332,37 @@ struct PlanSection: View {
                     .environment(\.layoutDirection, .leftToRight)
             }
             Spacer()
-            if !showSetup && building == nil {
-                Button { withAnimation { showSetup = true } } label: {
-                    Label("جدول جديد · New plan", systemImage: "arrow.clockwise")
-                        .font(VFont.readex(12, weight: 600))
+            VStack(alignment: .trailing, spacing: 10) {
+                if let plan = record.plan { shareMenu(record, plan) }
+                if !showSetup && building == nil {
+                    Button { withAnimation { showSetup = true } } label: {
+                        Label("جدول جديد · New plan", systemImage: "arrow.clockwise")
+                            .font(VFont.readex(12, weight: 600))
+                    }
                 }
             }
+        }
+    }
+
+    /// Sends the plan as text (WhatsApp, Messages, Notes…): the week's menu, one day with recipes, or what's left to buy.
+    private func shareMenu(_ record: MealPlanRecord, _ plan: WeekPlan) -> some View {
+        let shownDay = mode == .day ? dayIndex : (record.dayIndex(for: Date()) ?? dayIndex)
+        let day = plan.days.first { $0.dayIndex == shownDay } ?? plan.days.first
+        return Menu {
+            ShareLink(item: PlanShareText.week(record, plan)) {
+                Label("الأسبوع كله · Whole week", systemImage: "calendar")
+            }
+            if let day {
+                ShareLink(item: PlanShareText.day(record, day)) {
+                    Label("\(PlanShareText.dayTitle(record, day.dayIndex)) بالوصفات · with recipes", systemImage: "fork.knife")
+                }
+            }
+            ShareLink(item: PlanShareText.groceries(GroceryList.build(plan), checked: Set(record.checkedGroceries))) {
+                Label("قائمة المشتريات · Grocery list", systemImage: "cart")
+            }
+        } label: {
+            Label("شارك · Share", systemImage: "square.and.arrow.up")
+                .font(VFont.readex(12, weight: 600))
         }
     }
 
@@ -437,7 +462,7 @@ struct PlanSection: View {
                     VStack(spacing: 1) {
                         Text(date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "ar")))).font(VFont.readex(10))
                         Text(date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "en")))).font(VFont.readex(9)).opacity(0.85)
-                        Text(date.formatted(.dateTime.day())).font(VFont.readex(16, weight: 600))
+                        Text(date.formatted(.dateTime.day().locale(Locale(identifier: "en")))).font(VFont.readex(16, weight: 600))
                     }
                     .frame(maxWidth: .infinity, minHeight: 66)
                     .foregroundStyle(selected ? .white : VColor.ink)
@@ -576,7 +601,7 @@ struct GroceriesView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("تم · Done") { dismiss() } }
                 ToolbarItemGroup(placement: .topBarLeading) {
-                    ShareLink(item: shareText(lines, checked: checked))
+                    ShareLink(item: PlanShareText.groceries(lines, checked: checked))
                     if !checked.isEmpty {
                         Button("شيل العلامات · Uncheck all") {
                             record.checkedGroceries = []
@@ -613,15 +638,71 @@ struct GroceriesView: View {
         }
     }
 
+}
+
+/// The plan as plain text for sharing. *Stars* make headings bold in WhatsApp.
+enum PlanShareText {
+    static func dayTitle(_ record: MealPlanRecord, _ index: Int) -> String {
+        record.date(ofDay: index).formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "ar@numbers=latn")))
+    }
+
+    private static func dayHeading(_ record: MealPlanRecord, _ index: Int) -> String {
+        let english = record.date(ofDay: index).formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "en")))
+        return "*\(dayTitle(record, index)) · \(english)*"
+    }
+
+    private static func range(_ record: MealPlanRecord) -> String {
+        let english = Locale(identifier: "en")
+        let first = record.startDate.formatted(.dateTime.day().month(.abbreviated).locale(english))
+        let last = record.date(ofDay: 6).formatted(.dateTime.day().month(.abbreviated).locale(english))
+        return "\(first) – \(last)"
+    }
+
+    /// Every day's meals, plus the cooking plan.
+    static func week(_ record: MealPlanRecord, _ plan: WeekPlan) -> String {
+        var text = ["*جدول أكل الأسبوع · Weekly meal plan*", range(record)]
+        for day in plan.days.sorted(by: { $0.dayIndex < $1.dayIndex }) {
+            text.append("")
+            text.append(dayHeading(record, day.dayIndex))
+            for meal in day.meals {
+                text.append("• \(meal.slot.ar): \(meal.nameAr)")
+                text.append("   \(meal.slot.en): \(meal.nameEn) · \(Int(meal.kcal)) kcal")
+            }
+        }
+        if !plan.prepAr.isEmpty {
+            text += ["", "*خطة الطبخ · Cooking plan*", plan.prepAr, plan.prepEn]
+        }
+        text += ["", "— Vitalyn"]
+        return text.joined(separator: "\n")
+    }
+
+    /// One day with each meal's ingredients and method.
+    static func day(_ record: MealPlanRecord, _ day: PlanDay) -> String {
+        var text = [dayHeading(record, day.dayIndex)]
+        for meal in day.meals {
+            text.append("")
+            text.append("*\(meal.slot.ar) · \(meal.slot.en)* — \(meal.nameAr)")
+            text.append("\(meal.nameEn) · \(Int(meal.kcal)) kcal")
+            if !meal.ingredients.isEmpty {
+                text.append("المكونات · Ingredients:")
+                text += meal.ingredients.map { "• \($0.nameAr) / \($0.nameEn) — \($0.amountText)" }
+            }
+            if !meal.recipeAr.isEmpty { text.append("الطريقة: \(meal.recipeAr)") }
+            if !meal.recipeEn.isEmpty { text.append("Method: \(meal.recipeEn)") }
+        }
+        text += ["", "— Vitalyn"]
+        return text.joined(separator: "\n")
+    }
+
     /// What's still to buy (or everything, once it's all ticked), by section.
-    private func shareText(_ lines: [GroceryLine], checked: Set<String>) -> String {
+    static func groceries(_ lines: [GroceryLine], checked: Set<String>) -> String {
         let toBuy = lines.filter { !checked.contains($0.id) }
         let shown = toBuy.isEmpty ? lines : toBuy
-        var text = ["قائمة المشتريات · Grocery list"]
+        var text = ["*قائمة المشتريات · Grocery list*"]
         for category in GroceryCategory.allCases {
             let items = shown.filter { $0.category == category }
             guard !items.isEmpty else { continue }
-            text.append("\n\(category.ar) · \(category.en)")
+            text.append("\n*\(category.ar) · \(category.en)*")
             text += items.map { "• \($0.nameAr) / \($0.nameEn) — \($0.quantity)" }
         }
         return text.joined(separator: "\n")

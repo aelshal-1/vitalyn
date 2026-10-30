@@ -14,6 +14,7 @@ struct OnboardingView: View {
     @State private var prepared = false
     @State private var imported: HealthService.HealthProfile?
     @State private var importing = false
+    @State private var editingImported = false
     let onFinish: () -> Void
 
     private let steps = 4
@@ -169,14 +170,7 @@ struct OnboardingView: View {
                         if imported.isEmpty {
                             BiText(ar: "Apple Health مفيهوش بيانات عنك لسه — هتكتبها في الخطوة الجاية.", en: "Apple Health has no profile data yet — you'll enter it next.", size: 12, weight: 400, color: VColor.inkSecondary)
                         } else {
-                            VStack(alignment: .leading, spacing: 4) {
-                                BiCaption(ar: "جبنا من Apple Health", en: "Imported from Apple Health", color: VColor.primaryDark)
-                                if let value = imported.heightCm { importedRow("الطول", "Height", "\(VFormat.number(Int(value.rounded()))) cm") }
-                                if let value = imported.weightKg { importedRow("الوزن", "Weight", "\(VFormat.decimal(value)) kg") }
-                                if let value = imported.bodyFatPercent { importedRow("نسبة الدهون", "Body fat", "\(VFormat.decimal(value))%") }
-                                if let value = imported.birthYear { importedRow("سنة الميلاد", "Birth year", String(value)) }
-                                if let value = imported.sex { importedRow("النوع", "Sex", value == .male ? "راجل · Male" : "ست · Female") }
-                            }
+                            importedSection(imported)
                         }
                     }
                 }
@@ -197,13 +191,88 @@ struct OnboardingView: View {
         }
     }
 
-    private func importedRow(_ ar: String, _ en: String, _ value: String) -> some View {
-        HStack {
-            Text("\(ar) · \(en)").font(VFont.readex(12)).foregroundStyle(VColor.inkSecondary)
-            Spacer()
-            Text(value).font(VFont.readex(13, weight: 600)).foregroundStyle(VColor.ink)
-                .environment(\.layoutDirection, .leftToRight)
+    /// What came from Health, shown as the profile's current values so edits show up here too.
+    private func importedSection(_ imported: HealthService.HealthProfile) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                BiCaption(ar: "جبنا من Apple Health", en: "Imported from Apple Health", color: VColor.primaryDark)
+                Spacer()
+                Button {
+                    withAnimation { editingImported.toggle() }
+                } label: {
+                    Label(editingImported ? "تمام · Done" : "عدّل · Edit", systemImage: editingImported ? "checkmark" : "pencil")
+                        .font(VFont.readex(12, weight: 600))
+                }
+            }
+            if editingImported {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        BiChip(ar: "راجل", en: "Male", selected: profile.sex == .male) { profile.sex = .male }
+                        BiChip(ar: "ست", en: "Female", selected: profile.sex == .female) { profile.sex = .female }
+                        Spacer()
+                    }
+                    BirthYearField(year: $profile.birthYear)
+                    NumberField(ar: "الطول", en: "Height", value: $profile.heightCm, unit: "cm", digits: 0)
+                    NumberField(ar: "الوزن دلوقتي", en: "Current weight", value: $profile.startWeightKg, unit: "kg")
+                    NumberField(ar: "نسبة الدهون", en: "Body fat", value: bodyFatBinding, unit: "%")
+                }
+                .padding(.top, 8)
+            } else {
+                if imported.heightCm != nil, profile.heightCm > 0 { importedRow("الطول", "Height", "\(VFormat.number(Int(profile.heightCm.rounded()))) cm") }
+                if imported.weightKg != nil, profile.startWeightKg > 0 {
+                    importedRow("الوزن", "Weight", "\(VFormat.decimal(profile.startWeightKg)) kg", measured: profile.startWeightKg == roundedImportedWeight ? imported.weightDate : nil)
+                }
+                if let value = imported.bodyFatPercent { importedRow("نسبة الدهون", "Body fat", "\(VFormat.decimal(value))%", measured: imported.bodyFatDate) }
+                if imported.birthYear != nil, profile.birthYear > 0 { importedRow("سنة الميلاد", "Birth year", String(profile.birthYear)) }
+                if imported.sex != nil { importedRow("النوع", "Sex", profile.sex == .male ? "راجل · Male" : "ست · Female") }
+            }
         }
+    }
+
+    /// A row; `measured` flags a reading old enough that it may no longer be right.
+    private func importedRow(_ ar: String, _ en: String, _ value: String, measured: Date? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("\(ar) · \(en)").font(VFont.readex(12)).foregroundStyle(VColor.inkSecondary)
+                Spacer()
+                Text(value).font(VFont.readex(13, weight: 600)).foregroundStyle(VColor.ink)
+                    .environment(\.layoutDirection, .leftToRight)
+            }
+            if let measured, measured < Date().addingTimeInterval(-30 * 86_400) {
+                Label {
+                    Text("آخر قياس \(Self.ago(measured, locale: "ar@numbers=latn")) · Last measured \(Self.ago(measured, locale: "en"))")
+                        .font(VFont.readex(11))
+                } icon: {
+                    Image(systemName: "clock.badge.exclamationmark")
+                }
+                .foregroundStyle(VColor.energy)
+            }
+        }
+    }
+
+    private static func ago(_ date: Date, locale: String) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: locale)
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// Health's weight as it was put into the profile, to tell whether the user changed it.
+    private var roundedImportedWeight: Double? {
+        imported?.weightKg.map { ($0 * 10).rounded() / 10 }
+    }
+
+    /// Body fat lives on the import (it feeds the goal step); 0 clears it.
+    private var bodyFatBinding: Binding<Double> {
+        Binding(
+            get: { imported?.bodyFatPercent ?? 0 },
+            set: { value in
+                let newValue = value > 0 ? value : nil
+                guard newValue != imported?.bodyFatPercent else { return }
+                imported?.bodyFatPercent = newValue
+                imported?.bodyFatDate = nil
+            }
+        )
     }
 
     /// Fills empty profile fields from Health; the user reviews and edits them on the next step.
@@ -222,7 +291,8 @@ struct OnboardingView: View {
         if !apiKey.trimmingCharacters(in: .whitespaces).isEmpty { ai.setKey(apiKey) }
         context.insert(profile)
         try? context.save()
-        if health.requested {
+        // Only write the weight back when it's new, so an old Health reading isn't re-dated to today.
+        if health.requested, profile.startWeightKg != roundedImportedWeight {
             Task { await health.saveBody(weightKg: profile.startWeightKg, bodyFatPercent: nil, leanMassKg: nil, date: Date()) }
         }
         NotificationService.scheduleDefaults()

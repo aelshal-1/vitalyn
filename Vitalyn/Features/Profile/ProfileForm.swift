@@ -21,31 +21,39 @@ struct BasicsSection: View {
                     BiChip(ar: "ست", en: "Female", selected: profile.sex == .female) { profile.sex = .female }
                     Spacer()
                 }
-                HStack {
-                    BiText(ar: "سنة الميلاد", en: "Birth year", size: 14, weight: 500)
-                    Spacer()
-                    Menu {
-                        Picker("سنة الميلاد · Birth year", selection: $profile.birthYear) {
-                            ForEach(Array((1930...2012).reversed()), id: \.self) { year in
-                                Text(String(year)).tag(year)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(profile.birthYear >= 1930 ? String(profile.birthYear) : "اختار · Choose")
-                                .font(VFont.readex(16, weight: 600))
-                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 12))
-                        }
-                        .foregroundStyle(VColor.ink)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 40)
-                        .background(VColor.ground, in: RoundedRectangle(cornerRadius: 10))
-                    }
-                    .accessibilityLabel("سنة الميلاد — Birth year")
-                }
+                BirthYearField(year: $profile.birthYear)
                 NumberField(ar: "الطول", en: "Height", value: $profile.heightCm, unit: "cm", digits: 0)
                 NumberField(ar: "الوزن دلوقتي", en: "Current weight", value: $profile.startWeightKg, unit: "kg")
             }
+        }
+    }
+}
+
+struct BirthYearField: View {
+    @Binding var year: Int
+
+    var body: some View {
+        HStack {
+            BiText(ar: "سنة الميلاد", en: "Birth year", size: 14, weight: 500)
+            Spacer()
+            Menu {
+                Picker("سنة الميلاد · Birth year", selection: $year) {
+                    ForEach(Array((1930...2012).reversed()), id: \.self) { year in
+                        Text(String(year)).tag(year)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(year >= 1930 ? String(year) : "اختار · Choose")
+                        .font(VFont.readex(16, weight: 600))
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12))
+                }
+                .foregroundStyle(VColor.ink)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 40)
+                .background(VColor.ground, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .accessibilityLabel("سنة الميلاد — Birth year")
         }
     }
 }

@@ -200,7 +200,9 @@ final class HealthService {
     struct HealthProfile {
         var heightCm: Double?
         var weightKg: Double?
+        var weightDate: Date?
         var bodyFatPercent: Double?
+        var bodyFatDate: Date?
         var sex: Sex?
         var birthYear: Int?
 
@@ -211,10 +213,14 @@ final class HealthService {
     func profileFromHealth() async -> HealthProfile {
         guard isAvailable, requested else { return HealthProfile() }
         let hints = profileHints()
+        let weight = await latest(.bodyMass, unit: .gramUnit(with: .kilo))
+        let bodyFat = await latest(.bodyFatPercentage, unit: .percent())
         return HealthProfile(
             heightCm: await latest(.height, unit: .meterUnit(with: .centi))?.value,
-            weightKg: await latest(.bodyMass, unit: .gramUnit(with: .kilo))?.value,
-            bodyFatPercent: await latest(.bodyFatPercentage, unit: .percent()).map { $0.value * 100 },
+            weightKg: weight?.value,
+            weightDate: weight?.date,
+            bodyFatPercent: bodyFat.map { $0.value * 100 },
+            bodyFatDate: bodyFat?.date,
             sex: hints.sex,
             birthYear: hints.birthYear
         )

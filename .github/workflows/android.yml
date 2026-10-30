@@ -75,12 +75,19 @@ jobs:
           fi
 
       - name: Core tests
-        run: ./gradlew :core:test --stacktrace
+        run: ./gradlew :core:test
 
       - name: Build release APK
         env:
           VERSION_CODE: ${{ github.run_number }}
-        run: ./gradlew :app:assembleRelease --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # Compiler errors last, so they're easy to find at the end of the log.
+      - name: Compiler errors
+        if: failure()
+        run: grep -E "^e: |error:|ERROR:" "$RUNNER_TEMP/build.log" | head -300 || true
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk "Vitalyn-${{ github.run_number }}.apk"

@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "VitalynCore", targets: ["VitalynCore"])
     ],
     targets: [
-        .target(name: "VitalynCore"),
+        .target(name: "VitalynCore", resources: [.copy("Body/Resources/vitalyn-body.bin")]),
         .testTarget(name: "VitalynCoreTests", dependencies: ["VitalynCore"])
     ]
 )

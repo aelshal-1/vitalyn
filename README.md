@@ -34,3 +34,9 @@ open Vitalyn.xcodeproj
 ```
 
 الخط: [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) — SIL Open Font License (`Vitalyn/Resources/Fonts/ReadexPro-OFL.txt`).
+
+## 3D body
+
+The avatar on the My body screen is the [MakeHuman](http://www.makehumancommunity.org) base body and shape targets (CC0),
+packed by `tools/avatar/build_body.py` into `Packages/VitalynCore/Sources/VitalynCore/Body/Resources/vitalyn-body.bin`.
+`BodyFit` shapes it on the device from height, weight, body fat and age; `tools/avatar/preview.py` renders it to a PNG for checks without a Mac.

@@ -1,41 +1,38 @@
 import SwiftUI
 import SwiftData
 import SceneKit
-import UniformTypeIdentifiers
 import VitalynCore
 
-/// "My body": the 3D avatar (once created/imported), measurements, journey slider and progress photos.
+/// "My body": a 3D body shaped from your numbers (start, now, goal), the journey slider and progress photos.
 struct BodyView: View {
-    @Environment(\.modelContext) private var context
     @Environment(HealthService.self) private var health
     @Query(sort: \InBodyScan.date) private var scans: [InBodyScan]
     @Query(sort: \UserProfile.createdAt) private var profiles: [UserProfile]
-    @Query(sort: \AvatarAsset.date, order: .reverse) private var avatars: [AvatarAsset]
     @Query(sort: \ProgressPhoto.date) private var photos: [ProgressPhoto]
 
+    @AppStorage("avatar-skin") private var skin = 2
+    @AppStorage("avatar-long-hair") private var longHair = -1 // -1 = by sex
+
     @State private var journey: Double = 0.5
+    @State private var comparing = false
+    @State private var bodies: AvatarBodies?
     @State private var showCapture = false
-    @State private var showImporter = false
-    @State private var importError: String?
+    @State private var showStyle = false
+    @State private var animation: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 stage
+                modePicker
+                measurementBar
                 journeyCard
-                HStack(spacing: 10) {
-                    Button { showCapture = true } label: {
-                        BiLabel(ar: "صور جديدة", en: "New photos", systemImage: "camera", size: 14)
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    Button { showImporter = true } label: {
-                        BiLabel(ar: "استورد أفاتار", en: "Import avatar", systemImage: "cube", size: 14)
-                    }
-                    .buttonStyle(PrimaryButtonStyle(color: VColor.night))
+                Button { showCapture = true } label: {
+                    BiLabel(ar: "صور تقدّم جديدة", en: "New progress photos", systemImage: "camera", size: 14)
                 }
-                if let importError { ErrorBanner(message: importError) }
+                .buttonStyle(PrimaryButtonStyle(color: VColor.night))
                 comparison
-                BiText(ar: "الأفاتار الواقعي بوشّك بيتعمل من صورك (3 سيلفي + صورتين لجسمك) وبيتظبط بأرقام InBody. تقدر تستورد ملف .usdz من خدمة أفاتار لحد ما نربطها جوه التطبيق.", en: "The realistic avatar is built from your photos (3 selfies + 2 body photos) and shaped by your InBody numbers. You can import a .usdz from an avatar service until it’s built into the app.", size: 12, weight: 400, color: VColor.inkSecondary)
+                BiText(ar: "الجسم ده متشكّل من طولك ووزنك ونسبة الدهون (من InBody لو موجود) وسنّك. كل ما تسجّل قياس جديد بيتغيّر معاك.", en: "This body is shaped from your height, weight, body fat (from InBody when available) and age. It changes with every new measurement.", size: 12, weight: 400, color: VColor.inkSecondary)
             }
             .padding(20)
             .frame(maxWidth: 720)
@@ -44,32 +41,119 @@ struct BodyView: View {
         .background(VColor.ground)
         .navigationTitle("جسمي · My body")
         .sheet(isPresented: $showCapture) { AvatarCaptureView() }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.usdz, UTType(filenameExtension: "reality") ?? .usdz]) { result in
-            importAvatar(result)
+        .sheet(isPresented: $showStyle) { AvatarStyleSheet(skin: $skin, longHair: longHairBinding).presentationDetents([.height(320)]) }
+        .task(id: statsKey) { await rebuild() }
+    }
+
+    // MARK: Body stats
+
+    private var profile: UserProfile? { profiles.first }
+
+    private var style: AvatarStyle {
+        AvatarStyle(skin: skin, longHair: longHair == -1 ? profile?.sex == .female : longHair == 1)
+    }
+
+    private var longHairBinding: Binding<Bool> {
+        Binding(get: { style.longHair }, set: { longHair = $0 ? 1 : 0 })
+    }
+
+    private var keyframes: (start: BodyStats, now: BodyStats, goal: BodyStats)? {
+        guard let profile else { return nil }
+        let first = scans.first
+        let latest = scans.last
+        let startWeight = first?.weightKg ?? profile.startWeightKg
+        let nowWeight = AppData.currentWeight(profile: profile, scans: scans, health: health)
+        let lean = latest?.effectiveLeanMassKg
+        func stats(_ weight: Double, fat: Double?) -> BodyStats {
+            BodyStats(sex: profile.sex, ageYears: profile.ageYears, heightCm: profile.heightCm, weightKg: weight, bodyFatPercent: fat)
         }
+        // With a scan, assume lean mass is kept and weight changes are fat.
+        let nowFat = lean.map { max(5, (nowWeight - $0) / nowWeight * 100) }
+        let goalFat = lean.map { max(8, (profile.goalWeightKg - $0) / profile.goalWeightKg * 100) }
+        return (stats(startWeight, fat: first?.effectiveBodyFatPercent), stats(nowWeight, fat: nowFat), stats(profile.goalWeightKg, fat: goalFat))
+    }
+
+    private var statsKey: String {
+        guard let k = keyframes else { return "none" }
+        return [k.start, k.now, k.goal].map { "\($0.sex)\($0.ageYears)-\($0.heightCm)-\($0.weightKg)-\($0.bodyFatPercent ?? -1)" }.joined(separator: "|")
+    }
+
+    private func rebuild() async {
+        guard let k = keyframes else { bodies = nil; return }
+        bodies = await AvatarBodies.make(start: k.start, now: k.now, goal: k.goal)
     }
 
     // MARK: Stage
 
     private var stage: some View {
-        ZStack(alignment: .bottom) {
-            Color(hex: 0x12201B)
-            if let avatar = avatars.first, let url = avatarURL(avatar) {
-                AvatarSceneView(url: url)
-            } else if let front = latestPhoto(.bodyFront), let image = UIImage(data: front) {
-                Image(uiImage: image).resizable().scaledToFit().padding(.vertical, 20)
+        ZStack {
+            VColor.ground
+            if let bodies {
+                BodyAvatarView(meshes: comparing ? [bodies.start, bodies.goal] : [bodies.at(journey)], style: style)
+            } else if profile == nil {
+                BiText(ar: "كمّل ملفك الأول", en: "Finish your profile first", size: 15, alignment: .center)
             } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "cube.transparent").font(.system(size: 44)).foregroundStyle(VColor.mint)
-                    BiText(ar: "الأفاتار بتاعك", en: "Your 3D avatar", size: 15, color: VColor.nightText, enColor: VColor.nightMuted, alignment: .center)
-                    BiText(ar: "ابدأ بصور جديدة", en: "Start with new photos", size: 12, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
-                }
-                .frame(maxHeight: .infinity)
+                ProgressView()
             }
-            measurementBar
         }
-        .frame(height: 460)
+        .frame(height: 480)
+        .overlay(alignment: .topTrailing) {
+            Button { showStyle = true } label: {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(VColor.ink)
+                    .frame(width: 44, height: 44)
+                    .background(VColor.surface, in: Circle())
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            }
+            .padding(12)
+            .accessibilityLabel("شكل الأفاتار · Avatar style")
+        }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 4) {
+                if comparing {
+                    HStack {
+                        Text("البداية · Start").frame(maxWidth: .infinity)
+                        Text("الهدف · Goal").frame(maxWidth: .infinity)
+                    }
+                    .font(VFont.readex(13, weight: 600))
+                    .foregroundStyle(VColor.ink)
+                    .environment(\.layoutDirection, .leftToRight)
+                }
+                Label("لفّ الموديل بصباعك · Drag to rotate", systemImage: "rotate.3d")
+                    .font(VFont.readex(11))
+                    .foregroundStyle(VColor.muted)
+            }
+            .padding(.bottom, 10)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(VColor.line))
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 8) {
+            BiChip(ar: "البداية", en: "Start", selected: !comparing && journey == 0) { show(0) }
+            BiChip(ar: "دلوقتي", en: "Now", selected: !comparing && journey == 0.5) { show(0.5) }
+            BiChip(ar: "الهدف", en: "Goal", selected: !comparing && journey == 1) { show(1) }
+            BiChip(ar: "قارن", en: "Compare", selected: comparing, dark: true) { comparing.toggle() }
+        }
+    }
+
+    /// Morphs smoothly to a point on the journey.
+    private func show(_ target: Double) {
+        comparing = false
+        animation?.cancel()
+        let from = journey
+        animation = Task { @MainActor in
+            let steps = 18
+            for step in 1...steps {
+                try? await Task.sleep(for: .milliseconds(22))
+                if Task.isCancelled { return }
+                let x = Double(step) / Double(steps)
+                journey = from + (target - from) * (x * x * (3 - 2 * x))
+            }
+            journey = target
+        }
     }
 
     private var measurementBar: some View {
@@ -79,18 +163,18 @@ struct BodyView: View {
             pill(ar: "الدهون", en: "Body fat", value: values.fat.map { "\(VFormat.decimal($0))%" } ?? "—", highlight: true)
             pill(ar: "العضلات", en: "Muscle", value: values.muscle.map { "\(VFormat.decimal($0)) kg" } ?? "—", highlight: false)
         }
-        .padding(12)
     }
 
     private func pill(ar: String, en: String, value: String, highlight: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(ar) · \(en)").font(VFont.readex(10)).foregroundStyle(VColor.nightMuted)
-            Text(value).font(VFont.readex(15, weight: 600)).foregroundStyle(highlight ? VColor.mint : VColor.nightText)
+            Text("\(ar) · \(en)").font(VFont.readex(10)).foregroundStyle(VColor.muted)
+            Text(value).font(VFont.readex(15, weight: 600)).foregroundStyle(highlight ? VColor.primary : VColor.ink)
                 .environment(\.layoutDirection, .leftToRight)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: 0x1C2F29), in: RoundedRectangle(cornerRadius: 12))
+        .background(VColor.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(VColor.line))
     }
 
     // MARK: Journey
@@ -120,26 +204,14 @@ struct BodyView: View {
     private var journeyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                BiText(ar: "رحلتك: أول قياس ← دلوقتي ← الهدف", en: "Your journey: first scan → now → goal", size: 14, weight: 500)
-                Slider(value: $journey, in: 0...1)
+                BiText(ar: "رحلتك: البداية ← دلوقتي ← الهدف", en: "Your journey: start → now → goal", size: 14, weight: 500)
+                Slider(value: Binding(get: { journey }, set: { animation?.cancel(); comparing = false; journey = $0 }), in: 0...1)
                     .tint(VColor.primary)
-                HStack {
-                    Button("أول قياس · First") { withAnimation { journey = 0 } }
-                    Spacer()
-                    Button("دلوقتي · Now") { withAnimation { journey = 0.5 } }
-                    Spacer()
-                    Button("الهدف · Goal") { withAnimation { journey = 1 } }
-                }
-                .font(VFont.readex(12, weight: 600))
             }
         }
     }
 
     // MARK: Photos
-
-    private func latestPhoto(_ kind: PhotoKind) -> Data? {
-        photos.last { $0.kindRaw == kind.rawValue }?.image
-    }
 
     private var comparison: some View {
         let fronts = photos.filter { $0.kindRaw == PhotoKind.bodyFront.rawValue }
@@ -168,47 +240,40 @@ struct BodyView: View {
             Text("\(ar) · \(en) · \(photo.date.formatted(date: .abbreviated, time: .omitted))").font(VFont.readex(11)).foregroundStyle(VColor.muted)
         }
     }
-
-    // MARK: Avatar files
-
-    private func avatarURL(_ avatar: AvatarAsset) -> URL? {
-        guard let data = avatar.file else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(avatar.fileName)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try? data.write(to: url)
-        }
-        return url
-    }
-
-    private func importAvatar(_ result: Result<URL, Error>) {
-        importError = nil
-        guard case let .success(url) = result else { return }
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else {
-            importError = "مقدرتش أقرا الملف · Couldn't read the file"
-            return
-        }
-        let asset = AvatarAsset()
-        asset.fileName = "avatar-\(UUID().uuidString).\(url.pathExtension.isEmpty ? "usdz" : url.pathExtension)"
-        asset.file = data
-        context.insert(asset)
-        try? context.save()
-    }
 }
 
-/// Rotatable, zoomable 3D view of the avatar file.
-struct AvatarSceneView: View {
-    let url: URL
+/// Skin tone and hair for the generated body.
+struct AvatarStyleSheet: View {
+    @Binding var skin: Int
+    @Binding var longHair: Bool
 
     var body: some View {
-        if let scene = try? SCNScene(url: url) {
-            SceneView(scene: scene, options: [.allowsCameraControl, .autoenablesDefaultLighting])
-                .background(Color(hex: 0x12201B))
-                .accessibilityLabel("الأفاتار 3D — 3D avatar")
-        } else {
-            BiText(ar: "الملف ده مش مدعوم", en: "This file isn't supported", size: 14, color: VColor.nightText, enColor: VColor.nightMuted, alignment: .center)
+        VStack(alignment: .leading, spacing: 18) {
+            SectionTitle(ar: "شكل الأفاتار", en: "Avatar style")
+            BiCaption(ar: "لون البشرة", en: "Skin tone")
+            HStack(spacing: 12) {
+                ForEach(AvatarStyle.skinTones.indices, id: \.self) { i in
+                    Button { skin = i } label: {
+                        Circle()
+                            .fill(Color(hex: AvatarStyle.skinTones[i]))
+                            .frame(width: 42, height: 42)
+                            .overlay(Circle().stroke(skin == i ? VColor.primary : VColor.line, lineWidth: skin == i ? 3 : 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Skin tone \(i + 1)")
+                    .accessibilityAddTraits(skin == i ? .isSelected : [])
+                }
+            }
+            BiCaption(ar: "الشعر", en: "Hair")
+            HStack(spacing: 8) {
+                BiChip(ar: "قصير", en: "Short", selected: !longHair) { longHair = false }
+                BiChip(ar: "طويل", en: "Long", selected: longHair) { longHair = true }
+            }
+            Spacer(minLength: 0)
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(VColor.ground)
     }
 }
 
@@ -252,7 +317,7 @@ struct AvatarCaptureView: View {
                     Spacer()
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 70)).foregroundStyle(VColor.mint)
                     BiText(ar: "الصور اتحفظت", en: "Photos saved", size: 22, color: VColor.nightText, enColor: VColor.nightMuted, alignment: .center)
-                    BiText(ar: "هتشوف المقارنة قبل وبعد في شاشة جسمي. تحويل الصور لأفاتار 3D جاي في تحديث قريب.", en: "See the before & after on the My body screen. Turning these photos into a 3D avatar is coming in an update.", size: 14, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
+                    BiText(ar: "هتشوف المقارنة قبل وبعد في شاشة جسمي.", en: "See the before & after on the My body screen.", size: 14, weight: 400, color: VColor.nightMuted, enColor: VColor.nightMuted, alignment: .center)
                     Spacer()
                     Button { dismiss() } label: { BiLabel(ar: "تمام", en: "Done") }
                         .buttonStyle(PrimaryButtonStyle())

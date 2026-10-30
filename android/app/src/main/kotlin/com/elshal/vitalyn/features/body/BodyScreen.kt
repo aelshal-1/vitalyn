@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material.icons.rounded.ThreeDRotation
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -270,7 +270,7 @@ fun BodyScreen() {
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Rounded.ThreeDRotation, contentDescription = null, tint = VColor.muted, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Rounded.ScreenRotation, contentDescription = null, tint = VColor.muted, modifier = Modifier.size(14.dp))
                         Text("لفّ الموديل بصباعك · Drag to rotate", style = VFont.style(11f, 400, VColor.muted))
                     }
                 }

@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -74,6 +75,7 @@ object VColor {
 object VFont {
     private val weights = listOf(200, 300, 400, 500, 600, 700)
 
+    @OptIn(ExperimentalTextApi::class)
     val readex: FontFamily = FontFamily(
         weights.map { weight ->
             Font(

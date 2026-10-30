@@ -84,6 +84,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // ListenableFuture (CameraX provider, WorkManager queries)
+    implementation("com.google.guava:guava:33.3.1-android")
 
     // Health Connect (Android's Apple Health)
     implementation("androidx.health.connect:connect-client:1.1.0-alpha10")

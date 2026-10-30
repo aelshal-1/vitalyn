@@ -9,6 +9,12 @@ enum WeekPlanner {
     /// Days written at once; more risks hitting the API key's rate limit.
     private static let parallelDays = 4
 
+    enum Progress: Equatable {
+        case dishes(picked: Int, total: Int)
+        case ingredients
+        case days(done: Int)
+    }
+
     static func build(
         ai: AIService,
         context: UserContext,
@@ -16,10 +22,17 @@ enum WeekPlanner {
         mealsPerDay: MealsPerDay,
         start: Date,
         request: String,
-        progress: @escaping (_ daysDone: Int) -> Void
+        progress: @escaping (Progress) -> Void
     ) async throws -> WeekPlan {
-        let menu = try await ai.run(WeekMenu.self, AITasks.weekMenu(context: context, preset: preset, mealsPerDay: mealsPerDay, start: start, request: request))
-        progress(0)
+        // Each dish in the streamed menu carries one "slot" key, so counting them shows how far it got.
+        let total = 7 * mealsPerDay.slots(for: preset).count
+        progress(.dishes(picked: 0, total: total))
+        let menuRequest = AITasks.weekMenu(context: context, preset: preset, mealsPerDay: mealsPerDay, start: start, request: request)
+        let menu = try await ai.run(WeekMenu.self, menuRequest) { text in
+            let picked = text.components(separatedBy: "\"slot\"").count - 1
+            progress(picked >= total ? .ingredients : .dishes(picked: picked, total: total))
+        }
+        progress(.days(done: 0))
         var details: [Int: [PlannedMeal]] = [:]
         var pending = menu.days.map(\.dayIndex)
         try await withThrowingTaskGroup(of: (Int, [PlannedMeal]).self) { group in
@@ -32,7 +45,7 @@ enum WeekPlanner {
             for _ in 0..<parallelDays { startNext() }
             for try await (index, meals) in group {
                 details[index] = meals
-                progress(details.count)
+                progress(.days(done: details.count))
                 startNext()
             }
         }

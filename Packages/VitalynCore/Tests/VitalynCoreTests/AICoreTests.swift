@@ -57,6 +57,37 @@ import Testing
         #expect(body["output_config"]?["format"]?["type"] == .string("json_schema"))
         #expect(body["temperature"] == nil)
         #expect(body["thinking"] == nil)
+        #expect(body["stream"] == .bool(true))
+    }
+
+    @Test func collectsStreamedText() throws {
+        var stream = StreamAccumulator()
+        let lines = [
+            "event: message_start",
+            #"data: {"type":"message_start","message":{"id":"msg_1"}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"tipAr\":\"أ\","}}"#,
+            #"data: {"type":"ping"}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\"tipEn\":\"b\"}"}}"#,
+            #"data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":12}}"#,
+            #"data: {"type":"message_stop"}"#
+        ]
+        for line in lines { try stream.consume(line) }
+        let tip = try JSONDecoder().decode(DailyTip.self, from: Data(try stream.finish().utf8))
+        #expect(tip.tipAr == "أ")
+        #expect(tip.tipEn == "b")
+    }
+
+    @Test func streamSurfacesStopsAndErrors() throws {
+        var truncated = StreamAccumulator()
+        try truncated.consume(#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{"}}"#)
+        try truncated.consume(#"data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}"#)
+        #expect(throws: ClaudeError.truncated) { try truncated.finish() }
+
+        #expect(throws: ClaudeError.http(status: 529, message: "Overloaded")) {
+            var overloaded = StreamAccumulator()
+            try overloaded.consume(#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)
+        }
     }
 
     @Test func haikuHasNoFallback() throws {

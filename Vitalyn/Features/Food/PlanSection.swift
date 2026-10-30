@@ -51,7 +51,7 @@ struct PlanSection: View {
     @State private var mode: Mode = .week
     @State private var dayIndex = 0
     @State private var working = false
-    @State private var daysDone: Int?
+    @State private var progress: WeekPlanner.Progress?
     @State private var swapping: String?
     @State private var error: String?
     @State private var showGroceries = false
@@ -64,11 +64,17 @@ struct PlanSection: View {
         VStack(alignment: .leading, spacing: 14) {
             if record == nil || showSetup { setupCard }
             if working {
-                if let daysDone {
-                    WorkingView(ar: "بكتب المقادير والوصفات… \(daysDone) من 7 أيام", en: "Writing portions and recipes… \(daysDone) of 7 days")
-                } else {
-                    WorkingView(ar: "بختار أكلات الأسبوع…", en: "Choosing this week’s dishes…")
+                switch progress {
+                case let .dishes(picked, total)?:
+                    WorkingView(ar: "بختار أكلات الأسبوع… \(picked) من \(total)", en: "Choosing this week’s dishes… \(picked) of \(total)")
+                case .ingredients?:
+                    WorkingView(ar: "بجمع المكونات وخطة الطبخ…", en: "Listing ingredients and the cooking plan…")
+                case let .days(done)?:
+                    WorkingView(ar: "بكتب المقادير والوصفات… \(done) من 7 أيام", en: "Writing portions and recipes… \(done) of 7 days")
+                case nil:
+                    WorkingView(ar: "بجهز الجدول…", en: "Preparing your plan…")
                 }
+                BiText(ar: "خلّي الشاشة دي مفتوحة لحد ما يخلص.", en: "Keep this screen open until it finishes.", size: 12, weight: 400, color: VColor.muted)
             }
             if let error { ErrorBanner(message: error) }
 
@@ -175,7 +181,7 @@ struct PlanSection: View {
         guard let userContext = AppData.userContext(context, health: health) else { return }
         speech.stop()
         working = true
-        daysDone = nil
+        progress = nil
         error = nil
         let startDate = start.date()
         let preset = preset
@@ -183,8 +189,8 @@ struct PlanSection: View {
         let request = request
         Task {
             do {
-                let plan = try await WeekPlanner.build(ai: ai, context: userContext, preset: preset, mealsPerDay: mealsPerDay, start: startDate, request: request) { done in
-                    daysDone = done
+                let plan = try await WeekPlanner.build(ai: ai, context: userContext, preset: preset, mealsPerDay: mealsPerDay, start: startDate, request: request) { step in
+                    progress = step
                 }
                 let record = MealPlanRecord()
                 record.startDate = startDate

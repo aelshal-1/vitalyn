@@ -336,7 +336,7 @@ public enum AITasks {
         List every ingredient the week needs once, with a short canonical name and its grocery category.
         """
         if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
-        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekMenuSchema, effort: .medium, maxTokens: 8000)
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: weekMenuSchema, effort: .low, maxTokens: 16000)
     }
 
     /// Step 2, run for each day: portions, macros, ingredients and method for that day's dishes.
@@ -353,7 +353,7 @@ public enum AITasks {
         \(ingredientList(menu.ingredients))
         """
         if !request.isEmpty { instruction += "\nThe user also asked: \(request)" }
-        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: dayMealsSchema, effort: .medium, maxTokens: 8000)
+        return AIRequest(system: system, messages: [.user([.text(instruction)])], schema: dayMealsSchema, effort: .medium, maxTokens: 16000)
     }
 
     public static func swapMeal(context: UserContext, meal: PlannedMeal, ingredients: [MenuIngredient], request: String) -> AIRequest {
@@ -469,7 +469,7 @@ extension CoachActionType {
 }
 
 extension ClaudeClient {
-    public func generate<T: Decodable>(_ type: T.Type, _ request: AIRequest) async throws -> T {
-        try await generate(type, system: request.system, messages: request.messages, schema: request.schema, effort: request.effort, maxTokens: request.maxTokens)
+    public func generate<T: Decodable>(_ type: T.Type, _ request: AIRequest, onText: (@Sendable (String) -> Void)? = nil) async throws -> T {
+        try await generate(type, system: request.system, messages: request.messages, schema: request.schema, effort: request.effort, maxTokens: request.maxTokens, onText: onText)
     }
 }

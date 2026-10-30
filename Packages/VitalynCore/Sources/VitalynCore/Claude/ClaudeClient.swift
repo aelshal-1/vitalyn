@@ -120,15 +120,17 @@ public struct ClaudeClient: Sendable {
     }
 
     /// Sends a request constrained to `schema` and decodes the JSON reply.
+    /// `onText` receives the reply so far while it streams in.
     public func generate<T: Decodable>(
         _ type: T.Type,
         system: String,
         messages: [ClaudeMessage],
         schema: JSONValue,
         effort: ClaudeEffort = .medium,
-        maxTokens: Int = 16000
+        maxTokens: Int = 16000,
+        onText: (@Sendable (String) -> Void)? = nil
     ) async throws -> T {
-        let text = try await send(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens)
+        let text = try await send(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens, onText: onText)
         do {
             return try JSONDecoder().decode(T.self, from: Data(text.utf8))
         } catch {
@@ -136,18 +138,36 @@ public struct ClaudeClient: Sendable {
         }
     }
 
+    /// Streams the reply (server-sent events), so long replies keep the connection alive
+    /// instead of sitting silent until they finish, and returns its text.
     public func send(
         system: String,
         messages: [ClaudeMessage],
         schema: JSONValue?,
         effort: ClaudeEffort = .medium,
-        maxTokens: Int = 16000
+        maxTokens: Int = 16000,
+        onText: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ClaudeError.missingAPIKey }
         let request = makeRequest(system: system, messages: messages, schema: schema, effort: effort, maxTokens: maxTokens)
-        let (data, response) = try await session.data(for: request)
+        let (bytes, response) = try await session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        return try Self.parse(data: data, status: status)
+        guard (200..<300).contains(status) else {
+            var data = Data()
+            for try await byte in bytes { data.append(byte) }
+            return try Self.parse(data: data, status: status)
+        }
+        var stream = StreamAccumulator()
+        var reported = 0
+        for try await line in bytes.lines {
+            try stream.consume(line)
+            // Report every few hundred bytes rather than on each tiny delta.
+            if let onText, stream.text.utf8.count - reported >= 300 {
+                reported = stream.text.utf8.count
+                onText(stream.text)
+            }
+        }
+        return try stream.finish()
     }
 
     public func makeRequest(
@@ -182,7 +202,8 @@ public struct ClaudeClient: Sendable {
             ("messages", .array(messages.map { message -> JSONValue in
                 ["role": .string(message.role.rawValue), "content": .array(message.content.map(\.json))]
             })),
-            ("output_config", .object(outputConfig))
+            ("output_config", .object(outputConfig)),
+            ("stream", true)
         ]
         if model.supportsFallback {
             pairs.append(("fallbacks", "default"))
@@ -203,6 +224,39 @@ public struct ClaudeClient: Sendable {
             .filter { $0["type"] == .string("text") }
             .compactMap { $0["text"]?.stringValue }
         let text = texts.joined()
+        if stopReason == "max_tokens" { throw ClaudeError.truncated }
+        guard !text.isEmpty else { throw ClaudeError.emptyResponse }
+        return text
+    }
+}
+
+/// Collects the reply text from a Messages API event stream.
+struct StreamAccumulator {
+    private(set) var text = ""
+    private(set) var stopReason: String?
+
+    mutating func consume(_ line: String) throws {
+        guard line.hasPrefix("data:") else { return }
+        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+        guard let event = try? JSONValue.parse(Data(payload.utf8)) else { return }
+        switch event["type"]?.stringValue {
+        case "content_block_delta":
+            if event["delta"]?["type"] == .string("text_delta"), let piece = event["delta"]?["text"]?.stringValue {
+                text += piece
+            }
+        case "message_delta":
+            if let reason = event["delta"]?["stop_reason"]?.stringValue { stopReason = reason }
+        case "error":
+            let kind = event["error"]?["type"]?.stringValue
+            let message = event["error"]?["message"]?.stringValue ?? "Stream error"
+            throw ClaudeError.http(status: kind == "overloaded_error" ? 529 : 500, message: message)
+        default:
+            break
+        }
+    }
+
+    func finish() throws -> String {
+        if stopReason == "refusal" { throw ClaudeError.refusal }
         if stopReason == "max_tokens" { throw ClaudeError.truncated }
         guard !text.isEmpty else { throw ClaudeError.emptyResponse }
         return text

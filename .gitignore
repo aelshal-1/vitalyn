@@ -16,3 +16,11 @@ fastlane/test_output/
 AuthKey*.p8
 
 .DS_Store
+
+# Android
+android/**/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+android/.kotlin/
+*.apk

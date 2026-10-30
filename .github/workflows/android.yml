@@ -1,0 +1,92 @@
+name: Android
+
+# Builds the Android app on every push that touches it, runs the core tests,
+# and attaches a signed, installable APK to the run (Actions → this run → Artifacts).
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HAS_KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Signing: your own keystore in the ANDROID_KEYSTORE_BASE64 secret (plus ANDROID_KEYSTORE_PASSWORD,
+      # ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) — see docs/ANDROID.md. Without it, a keystore is generated
+      # once and kept in the Actions cache, so each new APK still installs over the previous one.
+      - name: Restore generated keystore
+        if: ${{ env.HAS_KEYSTORE_SECRET != 'true' }}
+        id: keystore-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.vitalyn/sideload.keystore
+          key: vitalyn-sideload-keystore-v1
+
+      - name: Signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            {
+              echo "VITALYN_KEYSTORE=$RUNNER_TEMP/release.keystore"
+              echo "VITALYN_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "VITALYN_KEY_ALIAS=$KEY_ALIAS"
+              echo "VITALYN_KEY_PASSWORD=$KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+          else
+            mkdir -p ~/.vitalyn
+            if [ ! -f ~/.vitalyn/sideload.keystore ]; then
+              keytool -genkeypair -keystore ~/.vitalyn/sideload.keystore -storepass vitalyn-sideload \
+                -keypass vitalyn-sideload -alias vitalyn -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Vitalyn"
+            fi
+            {
+              echo "VITALYN_KEYSTORE=$HOME/.vitalyn/sideload.keystore"
+              echo "VITALYN_KEYSTORE_PASSWORD=vitalyn-sideload"
+              echo "VITALYN_KEY_ALIAS=vitalyn"
+              echo "VITALYN_KEY_PASSWORD=vitalyn-sideload"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Core tests
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Build release APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "Vitalyn-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vitalyn-android-${{ github.run_number }}
+          path: android/Vitalyn-${{ github.run_number }}.apk
+          if-no-files-found: error

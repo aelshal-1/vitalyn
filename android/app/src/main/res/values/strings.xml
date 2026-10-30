@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_fuel_description">السعرات الباقية والماكروز · Calories left and macros</string>
+    <string name="widget_streak_description">عدد الأيام اللي التزمت فيها · Days on plan in a row</string>
+    <string name="widget_steps_description">خطواتك النهارده من Health Connect · Today\'s steps</string>
+    <string name="widget_water_description">دوس + عشان تضيف كوباية · Tap + to add a glass</string>
+    <string name="widget_journey_description">الوزن والتغيير من البداية · Weight and change since you started</string>
+</resources>
